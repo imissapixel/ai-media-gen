@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Media Generator</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Generate AI-powered images and videos with advanced customization options">
+    <meta name="theme-color" content="#667eea">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="AI Media Gen">
+    <meta name="msapplication-TileColor" content="#667eea">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
+    <link rel="apple-touch-icon" href="logo.svg">
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* General Reset & Body Styling */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* Main Container */
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+            transition: all 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 35px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        /* Tab Navigation */
+        .tab-navigation {
+            display: flex;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 30px;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px 20px;
+            background: #f7fafc;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: #718096;
+            transition: all 0.3s ease;
+            font-size: 16px;
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-button:hover:not(.active) {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Form Styling */
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 8px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            background: #ffffff;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .form-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 1rem center;
+            background-repeat: no-repeat;
+            background-size: 1.25em;
+            cursor: pointer;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* File Upload Styling */
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-upload-label {
+            display: block;
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px dashed #e2e8f0;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f7fafc;
+            color: #718096;
+        }
+
+        .file-upload-label:hover {
+            border-color: #667eea;
+            background: #edf2f7;
+        }
+
+        .file-upload-label.has-file {
+            border-color: #38a169;
+            background: #f0fff4;
+            color: #38a169;
+        }
+
+        /* Radio Button Group */
+        .radio-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+        }
+
+        .radio-option {
+            min-width: 100px;
+        }
+
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+
+        .radio-option label {
+            display: block;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #ffffff;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .radio-option input[type="radio"]:checked + label {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .radio-option label:hover {
+            border-color: #667eea;
+        }
+
+        /* Button & State Styling */
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        /* Message & Loading Indicators */
+        .loading, .video-container, .image-container, .error-message, .success-message {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .loading.show, .video-container.show, .image-container.show, .error-message.show, .success-message.show {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #718096;
+            font-size: 16px;
+        }
+        
+        .message-box {
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .error-message {
+            background: #e53e3e;
+        }
+
+        .success-message {
+            background: #38a169;
+        }
+
+        /* Settings collapse functionality */
+        .settings-collapsed {
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .settings-expanded {
+            max-height: none;
+            opacity: 1;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+
+        /* Action buttons for generated content */
+        .action-buttons {
+            display: none;
+            margin: 20px 0;
+            text-align: center;
+            gap: 15px;
+        }
+
+        .action-buttons.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .action-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .generate-another-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .generate-another-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .download-btn {
+            background: #38a169;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #2f855a;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(56, 161, 105, 0.3);
+        }
+
+        /* Gallery Styles */
+        .gallery-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 8px;
+        }
+        
+        .gallery-subtitle {
+            text-align: center;
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 20px;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            aspect-ratio: 1;
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .gallery-item-media {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #f7fafc;
+        }
+
+        .gallery-item-type {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .gallery-item-delete {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(4px);
+        }
+
+        .gallery-item-delete:hover {
+            background: rgba(220, 38, 38, 1);
+            transform: scale(1.1);
+        }
+
+        .gallery-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .gallery-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .gallery-clear-all {
+            text-align: center;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .clear-all-btn {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .clear-all-btn:hover {
+            background: #c53030;
+        }
+
+        /* Modal for full-size viewing */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .modal-close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-info {
+            background: rgba(255, 255, 255, 0.95);
+            color: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-prompt {
+            font-size: 16px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .modal-settings {
+            font-size: 14px;
+            color: #4a5568;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .modal-date {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 8px;
+        }
+
+        /* PWA Install Banner */
+        .pwa-install-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 20px;
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .pwa-install-banner.show {
+            display: flex;
+        }
+
+        .pwa-banner-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .pwa-banner-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .pwa-banner-text {
+            flex: 1;
+        }
+
+        .pwa-banner-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .pwa-banner-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .pwa-banner-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .pwa-banner-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .pwa-banner-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .pwa-banner-btn.primary {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+        }
+
+        .pwa-banner-btn.primary:hover {
+            background: white;
+        }
+
+        .pwa-banner-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px;
+            margin-left: 8px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .pwa-banner-close:hover {
+            opacity: 1;
+        }
+
+        .pwa-safari-instructions {
+            font-size: 12px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            line-height: 1.3;
+        }
+
+        .pwa-safari-step {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 2px 0;
+        }
+
+        /* Adjust main container when banner is visible */
+        body.pwa-banner-visible {
+            padding-top: 80px;
+        }
+
+        @media (max-width: 640px) {
+            body.pwa-banner-visible {
+                padding-top: 120px;
+            }
+            
+            .pwa-install-banner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 16px 20px;
+            }
+            
+            .pwa-banner-content {
+                width: 100%;
+            }
+            
+            .pwa-banner-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+
+        /* Media Players */
+        .video-container, .image-container {
+            text-align: center;
+        }
+
+        .video-player {
+            width: 100%;
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            background-color: #000;
+        }
+
+        .generated-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 640px) {
+            .container {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+            .title {
+                font-size: 24px;
+            }
+            .radio-group {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- PWA Install Banner -->
+    <div id="pwaInstallBanner" class="pwa-install-banner">
+        <div class="pwa-banner-content">
+            <div class="pwa-banner-icon">📱</div>
+            <div class="pwa-banner-text">
+                <div class="pwa-banner-title">Install AI Media Generator</div>
+                <div class="pwa-banner-subtitle">Get the full app experience for best convenience</div>
+                <div id="safariInstructions" class="pwa-safari-instructions" style="display: none;">
+                    <div class="pwa-safari-step">1. Tap the <strong>Share</strong> button ⤴️</div>
+                    <div class="pwa-safari-step">2. Scroll down and tap <strong>"Add to Home Screen"</strong> ➕</div>
+                    <div class="pwa-safari-step">3. Tap <strong>"Add"</strong> to install</div>
+                </div>
+            </div>
+        </div>
+        <div class="pwa-banner-actions">
+            <button id="pwaInstallBtn" class="pwa-banner-btn primary" style="display: none;">Install</button>
+            <button id="pwaShowInstructions" class="pwa-banner-btn" style="display: none;">How to Install</button>
+            <button id="pwaLaterBtn" class="pwa-banner-btn">Later</button>
+        </div>
+        <button id="pwaDismissBtn" class="pwa-banner-close">&times;</button>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1 class="title">AI Media Generator</h1>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-button active" data-tab="image">🎨 Image</button>
+            <button class="tab-button" data-tab="video">🎬 Video</button>
+            <button class="tab-button" data-tab="gallery">🖼️ Gallery</button>
+        </div>
+
+        <!-- Image Generation Tab -->
+        <div id="image-tab" class="tab-content active">
+            <form id="imageForm" class="settings-expanded">
+                <div class="form-group">
+                    <label for="inputImage" class="form-label">Input Image (Optional)</label>
+                    <div class="file-upload">
+                        <input type="file" id="inputImage" name="inputImage" accept="image/*">
+                        <label for="inputImage" class="file-upload-label" id="imageUploadLabel">
+                            📁 Choose an image file (optional)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="imagePrompt" class="form-label">Image Prompt</label>
+                    <textarea 
+                        id="imagePrompt" 
+                        name="imagePrompt" 
+                        class="form-input form-textarea" 
+                        placeholder="e.g., A futuristic cityscape at sunset with flying cars"
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Size</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="size1" name="size" value="1024x1024" checked required>
+                            <label for="size1">1024×1024<br><small>Square</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="size2" name="size" value="1024x1536" required>
+                            <label for="size2">1024×1536<br><small>Portrait</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="size3" name="size" value="1536x1024" required>
+                            <label for="size3">1536×1024<br><small>Landscape</small></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Quality</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="quality1" name="quality" value="low" checked required>
+                            <label for="quality1">Low</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="quality2" name="quality" value="medium" required>
+                            <label for="quality2">Medium</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="quality3" name="quality" value="high" required>
+                            <label for="quality3">High</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Output Format</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="outputFormat1" name="outputFormat" value="jpeg" checked required>
+                            <label for="outputFormat1">JPG</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="outputFormat2" name="outputFormat" value="png" required>
+                            <label for="outputFormat2">PNG</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="imageSubmitBtn">
+                    Generate Image
+                </button>
+            </form>
+
+            <!-- Image Status Indicators -->
+            <div class="loading" id="imageLoading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Creating your image masterpiece... Please wait.</div>
+            </div>
+
+            <div class="success-message message-box" id="imageSuccessMessage">
+                ✅ Image generated successfully!
+            </div>
+
+            <div class="error-message message-box" id="imageErrorMessage">
+                ❌ <span id="imageErrorText"></span>
+            </div>
+
+            <!-- Action buttons for image -->
+            <div class="action-buttons" id="imageActionButtons">
+                <button class="action-btn generate-another-btn" data-action="show-image-settings">Generate Another</button>
+                <button class="action-btn download-btn" data-action="download-image">Download</button>
+            </div>
+
+            <!-- Image Container -->
+            <div class="image-container" id="imageContainer">
+                <img id="generatedImage" class="generated-image" alt="Generated Image">
+            </div>
+        </div>
+
+        <!-- Video Generation Tab -->
+        <div id="video-tab" class="tab-content">
+            <form id="videoForm" class="settings-expanded">
+                <div class="form-group">
+                    <label for="videoDescription" class="form-label">Video Description</label>
+                    <textarea 
+                        id="videoDescription" 
+                        name="videoDescription" 
+                        class="form-input form-textarea" 
+                        placeholder="e.g., A cinematic shot of an astronaut riding a horse on Mars"
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Duration (seconds)</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="duration1" name="duration" value="5" checked required>
+                            <label for="duration1">5 sec</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="duration2" name="duration" value="10" required>
+                            <label for="duration2">10 sec</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="duration3" name="duration" value="15" required>
+                            <label for="duration3">15 sec</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="duration4" name="duration" value="20" required>
+                            <label for="duration4">20 sec</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Aspect Ratio</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="aspect3" name="aspectRatio" value="1:1" checked required>
+                            <label for="aspect3">1:1<br><small>Square</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="aspect1" name="aspectRatio" value="16:9" required>
+                            <label for="aspect1">16:9<br><small>Landscape</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="aspect2" name="aspectRatio" value="9:16" required>
+                            <label for="aspect2">9:16<br><small>Portrait</small></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Video Format</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="format1" name="format" value="480p" checked required>
+                            <label for="format1">480p<br><small>SD</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="format2" name="format" value="720p" required>
+                            <label for="format2">720p<br><small>HD</small></label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="format3" name="format" value="1080p" required>
+                            <label for="format3">1080p<br><small>Full HD</small></label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="videoSubmitBtn">
+                    Generate Video
+                </button>
+            </form>
+
+            <!-- Video Status Indicators -->
+            <div class="loading" id="videoLoading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Generating your video masterpiece... Please wait.</div>
+            </div>
+
+            <div class="success-message message-box" id="videoSuccessMessage">
+                ✅ Video generated successfully!
+            </div>
+
+            <div class="error-message message-box" id="videoErrorMessage">
+                ❌ <span id="videoErrorText"></span>
+            </div>
+
+            <!-- Action buttons for video -->
+            <div class="action-buttons" id="videoActionButtons">
+                <button class="action-btn generate-another-btn" data-action="show-video-settings">Generate Another</button>
+                <button class="action-btn download-btn" data-action="download-video">Download</button>
+            </div>
+
+            <!-- Video Player Container -->
+            <div class="video-container" id="videoContainer">
+                <video id="videoPlayer" class="video-player" controls>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        </div>
+
+        <!-- Gallery Tab -->
+        <div id="gallery-tab" class="tab-content">
+            <div class="gallery-title">Your last 50 generations</div>
+            <div class="gallery-subtitle">All content is stored offline in your device</div>
+            <div id="galleryContent">
+                <!-- Gallery items will be loaded here -->
+            </div>
+            <div class="gallery-clear-all">
+                <button class="clear-all-btn" data-action="clear-gallery">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for full-size viewing -->
+    <div id="mediaModal" class="modal">
+        <span class="modal-close" data-action="close-modal">&times;</span>
+        <div class="modal-content">
+            <div style="max-height: 70vh; display: flex; align-items: center;">
+                <img id="modalImage" style="display: none; max-width: 100%; max-height: 100%; border-radius: 12px;">
+                <video id="modalVideo" style="display: none; max-width: 100%; max-height: 100%; border-radius: 12px;" controls>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            <div id="modalInfo" class="modal-info">
+                <div id="modalPrompt" class="modal-prompt"></div>
+                <div id="modalSettings" class="modal-settings"></div>
+                <div id="modalDate" class="modal-date"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Document ready handler
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+        });
+
+        // Setup all event listeners
+        function setupEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    const tabName = this.getAttribute('data-tab');
+                    switchTab(tabName, e);
+                });
+            });
+
+            // Action buttons
+            document.addEventListener('click', function(e) {
+                const action = e.target.getAttribute('data-action');
+                if (!action) return;
+
+                switch(action) {
+                    case 'show-image-settings':
+                        showImageSettings();
+                        break;
+                    case 'download-image':
+                        downloadImage();
+                        break;
+                    case 'show-video-settings':
+                        showVideoSettings();
+                        break;
+                    case 'download-video':
+                        downloadVideo();
+                        break;
+                    case 'clear-gallery':
+                        clearAllGallery();
+                        break;
+                    case 'close-modal':
+                        closeModal();
+                        break;
+                    case 'delete-gallery-item':
+                        const itemId = e.target.getAttribute('data-item-id');
+                        deleteGalleryItem(itemId, e);
+                        break;
+                }
+            });
+        }
+
+        // Tab switching functionality  
+        function switchTab(tabName, event) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Add active class to clicked button
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                // Fallback: find and activate the correct button
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    if (btn.textContent.toLowerCase().includes(tabName)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+            
+            // Load gallery if switching to gallery tab
+            if (tabName === 'gallery') {
+                loadGallery();
+            }
+        }
+
+        // File upload label update
+        document.getElementById('inputImage').addEventListener('change', function(e) {
+            const label = document.getElementById('imageUploadLabel');
+            if (e.target.files.length > 0) {
+                label.textContent = `📁 ${e.target.files[0].name}`;
+                label.classList.add('has-file');
+            } else {
+                label.textContent = '📁 Choose an image file (optional)';
+                label.classList.remove('has-file');
+            }
+        });
+
+        // Video Form Handler
+        document.getElementById('videoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('videoSubmitBtn');
+            const loading = document.getElementById('videoLoading');
+            const videoContainer = document.getElementById('videoContainer');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const successMessage = document.getElementById('videoSuccessMessage');
+            const errorMessage = document.getElementById('videoErrorMessage');
+            const errorText = document.getElementById('videoErrorText');
+            
+            // Reset UI State and collapse settings
+            videoContainer.classList.remove('show');
+            successMessage.classList.remove('show');
+            errorMessage.classList.remove('show');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating...';
+            loading.classList.add('show');
+            
+            // Collapse the form settings
+            document.getElementById('videoForm').classList.remove('settings-expanded');
+            document.getElementById('videoForm').classList.add('settings-collapsed');
+
+            try {
+                const payload = [
+                  {
+                    "Video Description": document.getElementById('videoDescription').value,
+                    "Duration": document.querySelector('input[name="duration"]:checked').value,
+                    "Aspect Ratio": document.querySelector('input[name="aspectRatio"]:checked').value,
+                    "Format": document.querySelector('input[name="format"]:checked').value,
+                    "submittedAt": new Date().toISOString(),
+                    "formMode": "test"
+                  }
+                ];
+
+                console.log('Sending video JSON payload:', JSON.stringify(payload, null, 2));
+
+                const webhookUrl = 'https://n8n.xtend3d.com/webhook/sora-video-gen';
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'azure': 'xtend3d'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (err) {
+                        errorData = { message: 'The server returned an error, but the response was not valid JSON.' };
+                    }
+                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+                }
+
+                const videoBlob = await response.blob();
+                
+                if (!videoBlob.type.startsWith('video/')) {
+                    throw new Error(`Expected video data, but received type: ${videoBlob.type}. Please check the webhook response.`);
+                }
+
+                const videoUrl = URL.createObjectURL(videoBlob);
+                videoPlayer.src = videoUrl;
+
+                successMessage.classList.add('show');
+                videoContainer.classList.add('show');
+                document.getElementById('videoActionButtons').classList.add('show');
+                
+                // Save to gallery
+                saveToGallery('video', document.getElementById('videoDescription').value, videoUrl, {
+                    duration: document.querySelector('input[name="duration"]:checked').value,
+                    aspectRatio: document.querySelector('input[name="aspectRatio"]:checked').value,
+                    format: document.querySelector('input[name="format"]:checked').value
+                });
+
+            } catch (error) {
+                console.error('Video webhook request failed:', error);
+                errorText.textContent = error.message || 'An unknown error occurred. Please try again.';
+                errorMessage.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Video';
+                loading.classList.remove('show');
+            }
+        });
+
+        // Image Form Handler
+        document.getElementById('imageForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('imageSubmitBtn');
+            const loading = document.getElementById('imageLoading');
+            const imageContainer = document.getElementById('imageContainer');
+            const generatedImage = document.getElementById('generatedImage');
+            const successMessage = document.getElementById('imageSuccessMessage');
+            const errorMessage = document.getElementById('imageErrorMessage');
+            const errorText = document.getElementById('imageErrorText');
+            
+            // Reset UI State and collapse settings
+            imageContainer.classList.remove('show');
+            successMessage.classList.remove('show');
+            errorMessage.classList.remove('show');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating...';
+            loading.classList.add('show');
+            
+            // Collapse the form settings
+            document.getElementById('imageForm').classList.remove('settings-expanded');
+            document.getElementById('imageForm').classList.add('settings-collapsed');
+
+            try {
+                // Prepare form data
+                const formData = new FormData();
+                
+                // Add required fields
+                formData.append('prompt', document.getElementById('imagePrompt').value);
+                formData.append('size', document.querySelector('input[name="size"]:checked').value);
+                formData.append('quality', document.querySelector('input[name="quality"]:checked').value);
+                formData.append('output_format', document.querySelector('input[name="outputFormat"]:checked').value);
+                formData.append('n', '1');
+                
+                // Add optional input image if provided
+                const inputImage = document.getElementById('inputImage').files[0];
+                if (inputImage) {
+                    formData.append('image', inputImage);
+                }
+
+                console.log('Sending image generation request...');
+
+                const webhookUrl = 'https://n8n.xtend3d.com/webhook/gpt-image-1';
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'azure': 'xtend3d'
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (err) {
+                        errorData = { message: 'The server returned an error, but the response was not valid JSON.' };
+                    }
+                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+                }
+
+                const imageBlob = await response.blob();
+                
+                if (!imageBlob.type.startsWith('image/')) {
+                    throw new Error(`Expected image data, but received type: ${imageBlob.type}. Please check the webhook response.`);
+                }
+
+                const imageUrl = URL.createObjectURL(imageBlob);
+                generatedImage.src = imageUrl;
+
+                successMessage.classList.add('show');
+                imageContainer.classList.add('show');
+                document.getElementById('imageActionButtons').classList.add('show');
+                
+                // Save to gallery (works for both new images and edited images)
+                saveToGallery('image', document.getElementById('imagePrompt').value, imageUrl, {
+                    size: document.querySelector('input[name="size"]:checked').value,
+                    quality: document.querySelector('input[name="quality"]:checked').value,
+                    outputFormat: document.querySelector('input[name="outputFormat"]:checked').value,
+                    hasInputImage: !!document.getElementById('inputImage').files[0]
+                });
+
+            } catch (error) {
+                console.error('Image webhook request failed:', error);
+                errorText.textContent = error.message || 'An unknown error occurred. Please try again.';
+                errorMessage.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Image';
+                loading.classList.remove('show');
+            }
+        });
+
+        // Action button functions
+        function showImageSettings() {
+            document.getElementById('imageForm').classList.remove('settings-collapsed');
+            document.getElementById('imageForm').classList.add('settings-expanded');
+            document.getElementById('imageActionButtons').classList.remove('show');
+            document.getElementById('imageContainer').classList.remove('show');
+            document.getElementById('imageSuccessMessage').classList.remove('show');
+        }
+
+        function showVideoSettings() {
+            document.getElementById('videoForm').classList.remove('settings-collapsed');
+            document.getElementById('videoForm').classList.add('settings-expanded');
+            document.getElementById('videoActionButtons').classList.remove('show');
+            document.getElementById('videoContainer').classList.remove('show');
+            document.getElementById('videoSuccessMessage').classList.remove('show');
+        }
+
+        function downloadImage() {
+            const img = document.getElementById('generatedImage');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'generated-image.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        function downloadVideo() {
+            const video = document.getElementById('videoPlayer');
+            const url = video.src;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'generated-video.mp4';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // IndexedDB Gallery Functions
+        const DB_NAME = 'AIGalleryDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'galleryItems';
+        const MAX_GALLERY_ITEMS = 50;
+        
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        store.createIndex('createdAt', 'createdAt', { unique: false });
+                    }
+                };
+            });
+        }
+        
+        async function saveToGallery(type, prompt, dataUrl, settings) {
+            console.log('Saving to gallery:', type, prompt);
+            try {
+                // Convert blob URL to blob for IndexedDB storage
+                const response = await fetch(dataUrl);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch blob for gallery save');
+                }
+                const blob = await response.blob();
+                
+                const galleryItem = {
+                    id: Date.now().toString(),
+                    type: type,
+                    prompt: prompt,
+                    data: blob,
+                    settings: settings,
+                    createdAt: new Date().toISOString()
+                };
+                
+                const db = await initDB();
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                
+                // Add new item
+                await new Promise((resolve, reject) => {
+                    const request = store.add(galleryItem);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+                
+                // Get all items to check count and trim if necessary
+                const allItems = await new Promise((resolve, reject) => {
+                    const request = store.index('createdAt').getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                
+                // Sort by creation date (newest first) and trim if over limit
+                allItems.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                
+                if (allItems.length > MAX_GALLERY_ITEMS) {
+                    const itemsToDelete = allItems.slice(MAX_GALLERY_ITEMS);
+                    for (const item of itemsToDelete) {
+                        await new Promise((resolve, reject) => {
+                            const deleteRequest = store.delete(item.id);
+                            deleteRequest.onsuccess = () => resolve();
+                            deleteRequest.onerror = () => reject(deleteRequest.error);
+                        });
+                    }
+                    console.log('Gallery trimmed to', MAX_GALLERY_ITEMS, 'items');
+                }
+                
+                console.log('Successfully saved to gallery. Total items:', Math.min(allItems.length, MAX_GALLERY_ITEMS));
+                
+            } catch (error) {
+                console.error('Error saving to gallery:', error);
+                alert('Error saving to gallery: ' + error.message);
+            }
+        }
+
+        async function loadGallery() {
+            const galleryContent = document.getElementById('galleryContent');
+            
+            try {
+                const db = await initDB();
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                
+                const items = await new Promise((resolve, reject) => {
+                    const request = store.index('createdAt').getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                
+                // Sort by creation date (newest first)
+                items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                
+                if (items.length === 0) {
+                    galleryContent.innerHTML = `
+                        <div class="gallery-empty">
+                            <div class="gallery-empty-icon">🖼️</div>
+                            <p>No generated content yet.<br>Create your first image or video to see it here!</p>
+                        </div>
+                    `;
+                    // Hide the clear all button when gallery is empty
+                    document.querySelector('.gallery-clear-all').style.display = 'none';
+                    return;
+                }
+                
+                const galleryGrid = document.createElement('div');
+                galleryGrid.className = 'gallery-grid';
+                
+                for (const item of items) {
+                    const galleryItem = document.createElement('div');
+                    galleryItem.className = 'gallery-item';
+                    
+                    // Convert blob to URL for display
+                    const dataUrl = URL.createObjectURL(item.data);
+                    
+                    const mediaElement = item.type === 'video' 
+                        ? `<video class="gallery-item-media" src="${dataUrl}" muted></video>`
+                        : `<img class="gallery-item-media" src="${dataUrl}" alt="Generated content">`;
+                    
+                    const typeIcon = item.type === 'video' ? '🎬' : '🎨';
+                    
+                    galleryItem.innerHTML = `
+                        ${mediaElement}
+                        <span class="gallery-item-type">${typeIcon}</span>
+                        <button class="gallery-item-delete" data-action="delete-gallery-item" data-item-id="${item.id}">×</button>
+                    `;
+                    
+                    // Add click handler for full-size viewing
+                    galleryItem.addEventListener('click', (e) => {
+                        // Don't open modal if delete button was clicked
+                        if (e.target.classList.contains('gallery-item-delete') || e.target.getAttribute('data-action') === 'delete-gallery-item') return;
+                        openModal(item.type, dataUrl, item);
+                    });
+                    
+                    galleryGrid.appendChild(galleryItem);
+                }
+                
+                galleryContent.innerHTML = '';
+                galleryContent.appendChild(galleryGrid);
+                
+                // Show the clear all button when gallery has items
+                document.querySelector('.gallery-clear-all').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+                galleryContent.innerHTML = `
+                    <div class="gallery-empty">
+                        <div class="gallery-empty-icon">❌</div>
+                        <p>Error loading gallery.<br>Please refresh the page to try again.</p>
+                    </div>
+                `;
+                // Hide the clear all button on error
+                document.querySelector('.gallery-clear-all').style.display = 'none';
+            }
+        }
+
+        async function deleteGalleryItem(itemId, event) {
+            event.stopPropagation(); // Prevent opening the modal
+            if (confirm('Delete this item?')) {
+                try {
+                    const db = await initDB();
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    
+                    await new Promise((resolve, reject) => {
+                        const request = store.delete(itemId);
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+                    
+                    loadGallery();
+                } catch (error) {
+                    console.error('Error deleting gallery item:', error);
+                    alert('Error deleting item: ' + error.message);
+                }
+            }
+        }
+
+        async function clearAllGallery() {
+            if (confirm('Are you sure you want to clear all gallery items? This cannot be undone.')) {
+                try {
+                    const db = await initDB();
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    
+                    await new Promise((resolve, reject) => {
+                        const request = store.clear();
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+                    
+                    loadGallery();
+                } catch (error) {
+                    console.error('Error clearing gallery:', error);
+                    alert('Error clearing gallery: ' + error.message);
+                }
+            }
+        }
+
+        function openModal(type, dataUrl, item) {
+            const modal = document.getElementById('mediaModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalVideo = document.getElementById('modalVideo');
+            const modalPrompt = document.getElementById('modalPrompt');
+            const modalSettings = document.getElementById('modalSettings');
+            const modalDate = document.getElementById('modalDate');
+            
+            if (type === 'video') {
+                modalImage.style.display = 'none';
+                modalVideo.style.display = 'block';
+                modalVideo.src = dataUrl;
+            } else {
+                modalVideo.style.display = 'none';
+                modalImage.style.display = 'block';
+                modalImage.src = dataUrl;
+            }
+            
+            // Populate info panel
+            modalPrompt.textContent = item.prompt;
+            
+            const settingsText = item.type === 'video'
+                ? `Duration: ${item.settings.duration}s • Aspect: ${item.settings.aspectRatio} • Quality: ${item.settings.format}`
+                : `Size: ${item.settings.size} • Quality: ${item.settings.quality} • Format: ${item.settings.outputFormat}`;
+            
+            modalSettings.textContent = settingsText;
+            modalDate.textContent = `Generated on ${new Date(item.createdAt).toLocaleDateString()} at ${new Date(item.createdAt).toLocaleTimeString()}`;
+            
+            modal.classList.add('show');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('mediaModal');
+            const modalVideo = document.getElementById('modalVideo');
+            
+            modal.classList.remove('show');
+            modalVideo.pause();
+        }
+
+        // Close modal when clicking outside the content
+        document.getElementById('mediaModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Service Worker Registration for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('sw.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+
+        // PWA Install Banner Management
+        let deferredPrompt;
+        const DISMISS_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+        
+        function isIOS() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        }
+        
+        function isSafari() {
+            return /Safari/.test(navigator.userAgent) && /Apple Computer/.test(navigator.vendor);
+        }
+        
+        function isStandalone() {
+            return window.matchMedia('(display-mode: standalone)').matches || 
+                   window.navigator.standalone === true;
+        }
+        
+        function shouldShowBanner() {
+            // Don't show if already installed
+            if (isStandalone()) return false;
+            
+            // Check if dismissed within last 48 hours
+            const dismissedTime = localStorage.getItem('pwaBannerDismissed');
+            if (dismissedTime) {
+                const timePassed = Date.now() - parseInt(dismissedTime);
+                if (timePassed < DISMISS_DURATION) return false;
+            }
+            
+            return true;
+        }
+        
+        function showPWABanner() {
+            if (!shouldShowBanner()) return;
+            
+            const banner = document.getElementById('pwaInstallBanner');
+            const installBtn = document.getElementById('pwaInstallBtn');
+            const showInstructionsBtn = document.getElementById('pwaShowInstructions');
+            const safariInstructions = document.getElementById('safariInstructions');
+            
+            // Configure for iOS Safari
+            if (isIOS() && isSafari()) {
+                showInstructionsBtn.style.display = 'inline-block';
+                showInstructionsBtn.addEventListener('click', () => {
+                    safariInstructions.style.display = safariInstructions.style.display === 'none' ? 'block' : 'none';
+                });
+            }
+            
+            banner.classList.add('show');
+            document.body.classList.add('pwa-banner-visible');
+        }
+        
+        function hidePWABanner() {
+            const banner = document.getElementById('pwaInstallBanner');
+            banner.classList.remove('show');
+            document.body.classList.remove('pwa-banner-visible');
+        }
+        
+        // PWA Install Event Handlers
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            const installBtn = document.getElementById('pwaInstallBtn');
+            installBtn.style.display = 'inline-block';
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    if (outcome === 'accepted') {
+                        hidePWABanner();
+                    }
+                    deferredPrompt = null;
+                }
+            });
+            
+            showPWABanner();
+        });
+        
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA was installed');
+            hidePWABanner();
+            localStorage.removeItem('pwaBannerDismissed');
+        });
+        
+        // Banner Button Event Listeners
+        document.getElementById('pwaDismissBtn').addEventListener('click', () => {
+            localStorage.setItem('pwaBannerDismissed', Date.now().toString());
+            hidePWABanner();
+        });
+        
+        document.getElementById('pwaLaterBtn').addEventListener('click', () => {
+            localStorage.setItem('pwaBannerDismissed', Date.now().toString());
+            hidePWABanner();
+        });
+        
+        // Show banner on page load if conditions are met
+        window.addEventListener('load', () => {
+            // Delay showing banner slightly to avoid flash
+            setTimeout(() => {
+                if (!deferredPrompt && shouldShowBanner()) {
+                    // For browsers that don't support beforeinstallprompt (like iOS Safari)
+                    if (isIOS() || !('onbeforeinstallprompt' in window)) {
+                        showPWABanner();
+                    }
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
