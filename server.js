@@ -23,7 +23,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'"],
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'"],
             imgSrc: ["'self'", "data:", "blob:"],
-            connectSrc: ["'self'", "https://n8n.xtend3d.com"],
+            connectSrc: ["'self'", "https://n8n.xtend3d.com", "blob:"],
             mediaSrc: ["'self'", "blob:"],
             workerSrc: ["'self'"],
             manifestSrc: ["'self'"]
