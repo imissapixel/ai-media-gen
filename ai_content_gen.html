@@ -33,9 +33,10 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             padding: 20px;
+            padding-top: 40px;
         }
 
         /* Main Container */
@@ -47,6 +48,7 @@
             padding: 40px;
             width: 100%;
             max-width: 600px;
+            min-height: 500px;
             transition: all 0.3s ease;
         }
 
@@ -216,15 +218,16 @@
 
         .radio-option label {
             display: block;
-            padding: 12px 16px;
+            padding: 8px 12px;
             border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border-radius: 6px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
             background: #ffffff;
             color: #4a5568;
             font-weight: 500;
+            font-size: 14px;
         }
 
         .radio-option input[type="radio"]:checked + label {
@@ -485,6 +488,26 @@
 
         .clear-all-btn:hover {
             background: #c53030;
+        }
+
+        .clear-browser-data-link {
+            text-align: center;
+            margin-top: 30px;
+            padding-bottom: 20px;
+        }
+
+        .clear-browser-data-link a {
+            color: #718096;
+            font-size: 11px;
+            text-decoration: none;
+            opacity: 0.7;
+            transition: all 0.3s ease;
+        }
+
+        .clear-browser-data-link a:hover {
+            color: #4a5568;
+            opacity: 1;
+            text-decoration: underline;
         }
 
         /* Improve Prompt Button */
@@ -826,15 +849,29 @@
 
         /* Responsive Design */
         @media (max-width: 640px) {
+            body {
+                padding: 10px;
+                padding-top: 20px;
+            }
             .container {
-                padding: 30px 20px;
-                margin: 10px;
+                padding: 20px 15px;
+                margin: 0;
+                max-width: none;
+                border-radius: 15px;
             }
             .title {
                 font-size: 24px;
             }
             .radio-group {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(auto-fit, minmax(55px, 1fr));
+                gap: 4px;
+            }
+            .radio-option {
+                min-width: unset;
+            }
+            .radio-option label {
+                padding: 5px 2px;
+                font-size: 11px;
             }
         }
     </style>
@@ -1000,7 +1037,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Duration (seconds)</label>
+                    <label class="form-label">Duration</label>
                     <div class="radio-group">
                         <div class="radio-option">
                             <input type="radio" id="duration1" name="duration" value="5" checked required>
@@ -1107,6 +1144,11 @@
             </div>
             <div class="gallery-clear-all">
                 <button class="clear-all-btn" data-action="clear-gallery">Clear All</button>
+            </div>
+            
+            <!-- Always visible clear browser data link -->
+            <div class="clear-browser-data-link">
+                <a href="#" data-action="clear-browser-data">Clear all browser data</a>
             </div>
         </div>
     </div>
@@ -1697,6 +1739,9 @@
                 // Update the textarea with improved prompt
                 promptTextarea.value = improvedPrompt;
                 
+                // Expand textarea height for better readability
+                promptTextarea.style.minHeight = '120px';
+                
                 // Optional: Add visual feedback
                 promptTextarea.style.border = '2px solid #38a169';
                 setTimeout(() => {
@@ -1750,6 +1795,9 @@
                 // Update the textarea with improved prompt
                 promptTextarea.value = improvedPrompt;
                 
+                // Expand textarea height for better readability
+                promptTextarea.style.minHeight = '120px';
+                
                 // Optional: Add visual feedback
                 promptTextarea.style.border = '2px solid #38a169';
                 setTimeout(() => {
@@ -1800,6 +1848,9 @@
                         break;
                     case 'clear-gallery':
                         clearAllGallery();
+                        break;
+                    case 'clear-browser-data':
+                        clearAllBrowserData();
                         break;
                     case 'close-modal':
                         closeModal();
@@ -1934,7 +1985,7 @@
                 // Update loading text to show background processing
                 const loadingText = document.querySelector('#videoLoading .loading-text');
                 if (loadingText) {
-                    loadingText.textContent = 'Generating in background... You can minimize the app safely.';
+                    loadingText.textContent = 'Generating in background...';
                 }
 
             } catch (error) {
@@ -2040,7 +2091,7 @@
                 // Update loading text to show background processing
                 const loadingText = document.querySelector('#imageLoading .loading-text');
                 if (loadingText) {
-                    loadingText.textContent = 'Generating in background... You can minimize the app safely.';
+                    loadingText.textContent = 'Generating in background...';
                 }
 
             } catch (error) {
@@ -2208,7 +2259,7 @@
                     galleryContent.innerHTML = `
                         <div class="gallery-empty">
                             <div class="gallery-empty-icon">🖼️</div>
-                            <p>No generated content yet.<br>Create your first image or video to see it here!</p>
+                            <p>No generated content yet.<br>Generate media to see it here!</p>
                         </div>
                     `;
                     // Hide the clear all button when gallery is empty
@@ -2475,6 +2526,96 @@
                 }
             }, 1000);
         });
+          // Clear all browser data function
+          async function clearAllBrowserData() {
+              const confirmMessage = 'This will permanently delete ALL data including:\n\n' +
+                                   '• All generated images and videos\n' +
+                                   '• Gallery history\n' +
+                                   '• Background jobs\n' +
+                                   '• App settings and preferences\n' +
+                                   '• Service worker cache\n\n' +
+                                   'This action cannot be undone. Are you sure you want to continue?';
+
+              if (confirm(confirmMessage)) {
+                  try {
+                      // Clear IndexedDB databases
+                      if ('indexedDB' in window) {
+                          // Clear gallery database
+                          await new Promise((resolve, reject) => {
+                              const deleteReq = indexedDB.deleteDatabase('AIGalleryDB');
+                              deleteReq.onsuccess = () => resolve();
+                              deleteReq.onerror = () => reject(deleteReq.error);
+                          });
+
+                          // Clear background jobs database
+                          await new Promise((resolve, reject) => {
+                              const deleteReq = indexedDB.deleteDatabase('BackgroundJobsDB');
+                              deleteReq.onsuccess = () => resolve();
+                              deleteReq.onerror = () => reject(deleteReq.error);
+                          });
+                      }
+
+                      // Clear localStorage
+                      localStorage.clear();
+
+                      // Clear sessionStorage
+                      sessionStorage.clear();
+
+                      // Clear service worker caches
+                      if ('serviceWorker' in navigator && 'caches' in window) {
+                          const cacheNames = await caches.keys();
+                          await Promise.all(
+                              cacheNames.map(cacheName => caches.delete(cacheName))
+                          );
+                      }
+
+                      // Unregister service worker
+                      if ('serviceWorker' in navigator) {
+                          const registrations = await navigator.serviceWorker.getRegistrations();
+                          await Promise.all(
+                              registrations.map(registration => registration.unregister())
+                          );
+                      }
+
+                      // Clear only authentication cookies for this subdomain
+                      // Get all cookies and clear only authentication-related ones
+                      const cookies = document.cookie.split(";");
+                      const authCookieNames = ['session', 'auth', 'token', 'login', 'authenticated', 'access'];
+                      
+                      cookies.forEach(function(cookie) {
+                          const eqPos = cookie.indexOf("=");
+                          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+                          
+                          // Only clear cookies that appear to be authentication-related
+                          if (name && authCookieNames.some(authName => name.toLowerCase().includes(authName))) {
+                              // Clear cookie for this domain and subdomain
+                              const pathsAndDomains = [
+                                  { path: "/", domain: "" },
+                                  { path: "/", domain: window.location.hostname },
+                                  { path: "/", domain: "." + window.location.hostname.split('.').slice(-2).join('.') }
+                              ];
+                              
+                              pathsAndDomains.forEach(function(combo) {
+                                  let cookieString = name + "=;expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+                                  if (combo.path) cookieString += "path=" + combo.path + ";";
+                                  if (combo.domain) cookieString += "domain=" + combo.domain + ";";
+                                  document.cookie = cookieString;
+                              });
+                          }
+                      });
+
+                      // Show success message briefly before reload
+                      alert('All browser data has been cleared successfully. The page will now reload.');
+
+                      // Reload the page
+                      window.location.reload(true);
+
+                  } catch (error) {
+                      console.error('Error clearing browser data:', error);
+                      alert('Some data could not be cleared: ' + error.message + '\n\nPlease manually clear your browser data if needed.');
+                  }
+              }
+          }
     </script>
 </body>
 </html>
