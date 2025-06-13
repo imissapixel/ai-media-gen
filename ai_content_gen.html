@@ -240,7 +240,7 @@
         /* Button & State Styling */
         .submit-btn {
             width: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
             color: white;
             border: none;
             padding: 18px 24px;
@@ -255,7 +255,8 @@
 
         .submit-btn:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 25px rgba(66, 153, 225, 0.3);
+            background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%);
         }
 
         .submit-btn:disabled {
@@ -484,6 +485,35 @@
 
         .clear-all-btn:hover {
             background: #c53030;
+        }
+
+        /* Improve Prompt Button */
+        .improve-prompt-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .improve-prompt-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(159, 122, 234, 0.3);
+            background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%);
+        }
+
+        .improve-prompt-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         /* Modal for full-size viewing */
@@ -866,6 +896,9 @@
                         placeholder="e.g., A futuristic cityscape at sunset with flying cars"
                         required
                     ></textarea>
+                    <button type="button" class="improve-prompt-btn" id="improvePromptBtn">
+                        🪄 Improve Prompt
+                    </button>
                 </div>
 
                 <div class="form-group">
@@ -961,6 +994,9 @@
                         placeholder="e.g., A cinematic shot of an astronaut riding a horse on Mars"
                         required
                     ></textarea>
+                    <button type="button" class="improve-prompt-btn" id="improveVideoPromptBtn">
+                        🪄 Improve Prompt
+                    </button>
                 </div>
 
                 <div class="form-group">
@@ -1620,6 +1656,116 @@
             }
         });
 
+        // Improve Prompt Function
+        async function improvePrompt() {
+            const promptTextarea = document.getElementById('imagePrompt');
+            const improveBtn = document.getElementById('improvePromptBtn');
+            const inputImageField = document.getElementById('inputImage');
+            const currentPrompt = promptTextarea.value.trim();
+            
+            if (!currentPrompt) {
+                alert('Please enter a prompt first before improving it.');
+                return;
+            }
+            
+            // Check if an input image is selected
+            const hasInputImage = inputImageField.files && inputImageField.files.length > 0;
+            
+            // Disable button and show loading state
+            improveBtn.disabled = true;
+            improveBtn.textContent = '🔄 Improving...';
+            
+            try {
+                // Prepare the webhook URL with image flag
+                const webhookUrl = `https://n8n.xtend3d.com/webhook/ai-prompt-magic?image=${hasInputImage}`;
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                        'azure': 'xtend3d'
+                    },
+                    body: currentPrompt
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const improvedPrompt = await response.text();
+                
+                // Update the textarea with improved prompt
+                promptTextarea.value = improvedPrompt;
+                
+                // Optional: Add visual feedback
+                promptTextarea.style.border = '2px solid #38a169';
+                setTimeout(() => {
+                    promptTextarea.style.border = '';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error improving prompt:', error);
+                alert('Failed to improve prompt. Please try again.');
+            } finally {
+                // Re-enable button
+                improveBtn.disabled = false;
+                improveBtn.textContent = '🪄 Improve Prompt';
+            }
+        }
+
+        // Improve Video Prompt Function
+        async function improveVideoPrompt() {
+            const promptTextarea = document.getElementById('videoDescription');
+            const improveBtn = document.getElementById('improveVideoPromptBtn');
+            const currentPrompt = promptTextarea.value.trim();
+            
+            if (!currentPrompt) {
+                alert('Please enter a video description first before improving it.');
+                return;
+            }
+            
+            // Disable button and show loading state
+            improveBtn.disabled = true;
+            improveBtn.textContent = '🔄 Improving...';
+            
+            try {
+                // Prepare the webhook URL with video flag
+                const webhookUrl = 'https://n8n.xtend3d.com/webhook/ai-prompt-magic?image=video';
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                        'azure': 'xtend3d'
+                    },
+                    body: currentPrompt
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const improvedPrompt = await response.text();
+                
+                // Update the textarea with improved prompt
+                promptTextarea.value = improvedPrompt;
+                
+                // Optional: Add visual feedback
+                promptTextarea.style.border = '2px solid #38a169';
+                setTimeout(() => {
+                    promptTextarea.style.border = '';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error improving video prompt:', error);
+                alert('Failed to improve video prompt. Please try again.');
+            } finally {
+                // Re-enable button
+                improveBtn.disabled = false;
+                improveBtn.textContent = '🪄 Improve Prompt';
+            }
+        }
+
         // Setup all event listeners
         function setupEventListeners() {
             // Tab navigation
@@ -1629,6 +1775,10 @@
                     switchTab(tabName, e);
                 });
             });
+
+            // Improve Prompt buttons
+            document.getElementById('improvePromptBtn').addEventListener('click', improvePrompt);
+            document.getElementById('improveVideoPromptBtn').addEventListener('click', improveVideoPrompt);
 
             // Action buttons
             document.addEventListener('click', function(e) {
