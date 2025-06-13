@@ -1008,6 +1008,69 @@
     </div>
 
     <script>
+        // Webhook throttling system
+        const WEBHOOK_THROTTLE_DURATION = 15000; // 15 seconds
+        const webhookThrottleState = {
+            lastVideoCall: 0,
+            lastImageCall: 0,
+            deviceFingerprint: null
+        };
+
+        // Generate a device fingerprint for client-side identification
+        function generateDeviceFingerprint() {
+            if (webhookThrottleState.deviceFingerprint) {
+                return webhookThrottleState.deviceFingerprint;
+            }
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('Device fingerprint', 2, 2);
+            
+            const fingerprint = [
+                navigator.userAgent,
+                navigator.language,
+                screen.width + 'x' + screen.height,
+                new Date().getTimezoneOffset(),
+                canvas.toDataURL()
+            ].join('|');
+            
+            // Create a simple hash of the fingerprint
+            let hash = 0;
+            for (let i = 0; i < fingerprint.length; i++) {
+                const char = fingerprint.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            
+            webhookThrottleState.deviceFingerprint = 'fp_' + Math.abs(hash).toString(36);
+            return webhookThrottleState.deviceFingerprint;
+        }
+
+        // Check if webhook call is allowed (client-side throttling)
+        function canCallWebhook(type) {
+            const now = Date.now();
+            const lastCall = type === 'video' ? webhookThrottleState.lastVideoCall : webhookThrottleState.lastImageCall;
+            
+            if (now - lastCall < WEBHOOK_THROTTLE_DURATION) {
+                const remainingTime = Math.ceil((WEBHOOK_THROTTLE_DURATION - (now - lastCall)) / 1000);
+                throw new Error(`Please wait ${remainingTime} seconds before generating another ${type}. This prevents duplicate requests.`);
+            }
+            
+            return true;
+        }
+
+        // Update last webhook call timestamp
+        function updateWebhookTimestamp(type) {
+            const now = Date.now();
+            if (type === 'video') {
+                webhookThrottleState.lastVideoCall = now;
+            } else {
+                webhookThrottleState.lastImageCall = now;
+            }
+        }
+
         // Document ready handler
         document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
@@ -1112,17 +1175,30 @@
             const errorMessage = document.getElementById('videoErrorMessage');
             const errorText = document.getElementById('videoErrorText');
             
-            // Reset UI State and collapse settings
-            videoContainer.classList.remove('show');
-            successMessage.classList.remove('show');
-            errorMessage.classList.remove('show');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Generating...';
-            loading.classList.add('show');
-            
-            // Collapse the form settings
-            document.getElementById('videoForm').classList.remove('settings-expanded');
-            document.getElementById('videoForm').classList.add('settings-collapsed');
+            try {
+                // Check throttling before any UI changes
+                canCallWebhook('video');
+                
+                // Reset UI State and collapse settings
+                videoContainer.classList.remove('show');
+                successMessage.classList.remove('show');
+                errorMessage.classList.remove('show');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Generating...';
+                loading.classList.add('show');
+                
+                // Collapse the form settings
+                document.getElementById('videoForm').classList.remove('settings-expanded');
+                document.getElementById('videoForm').classList.add('settings-collapsed');
+
+                // Update throttle timestamp immediately after UI changes
+                updateWebhookTimestamp('video');
+            } catch (throttleError) {
+                // Handle throttling error without changing UI state
+                errorText.textContent = throttleError.message;
+                errorMessage.classList.add('show');
+                return;
+            }
 
             try {
                 const payload = [
@@ -1144,7 +1220,9 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'azure': 'xtend3d'
+                        'azure': 'xtend3d',
+                        'X-Device-Fingerprint': generateDeviceFingerprint(),
+                        'X-Request-Timestamp': Date.now().toString()
                     },
                     body: JSON.stringify(payload)
                 });
@@ -1202,17 +1280,30 @@
             const errorMessage = document.getElementById('imageErrorMessage');
             const errorText = document.getElementById('imageErrorText');
             
-            // Reset UI State and collapse settings
-            imageContainer.classList.remove('show');
-            successMessage.classList.remove('show');
-            errorMessage.classList.remove('show');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Generating...';
-            loading.classList.add('show');
-            
-            // Collapse the form settings
-            document.getElementById('imageForm').classList.remove('settings-expanded');
-            document.getElementById('imageForm').classList.add('settings-collapsed');
+            try {
+                // Check throttling before any UI changes
+                canCallWebhook('image');
+                
+                // Reset UI State and collapse settings
+                imageContainer.classList.remove('show');
+                successMessage.classList.remove('show');
+                errorMessage.classList.remove('show');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Generating...';
+                loading.classList.add('show');
+                
+                // Collapse the form settings
+                document.getElementById('imageForm').classList.remove('settings-expanded');
+                document.getElementById('imageForm').classList.add('settings-collapsed');
+
+                // Update throttle timestamp immediately after UI changes
+                updateWebhookTimestamp('image');
+            } catch (throttleError) {
+                // Handle throttling error without changing UI state
+                errorText.textContent = throttleError.message;
+                errorMessage.classList.add('show');
+                return;
+            }
 
             try {
                 // Prepare form data
@@ -1238,7 +1329,9 @@
                 const response = await fetch(webhookUrl, {
                     method: 'POST',
                     headers: {
-                        'azure': 'xtend3d'
+                        'azure': 'xtend3d',
+                        'X-Device-Fingerprint': generateDeviceFingerprint(),
+                        'X-Request-Timestamp': Date.now().toString()
                     },
                     body: formData
                 });
