@@ -558,6 +558,84 @@
             margin-top: 8px;
         }
 
+        /* Background Jobs Status */
+        .background-jobs-status {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .background-jobs-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .background-jobs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .background-job-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .background-job-icon {
+            font-size: 20px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .background-job-content {
+            flex: 1;
+        }
+
+        .background-job-type {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: capitalize;
+        }
+
+        .background-job-prompt {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 200px;
+        }
+
+        .background-job-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .background-job-time {
+            font-size: 11px;
+            color: #a0aec0;
+            margin-top: 4px;
+        }
+
         /* PWA Install Banner */
         .pwa-install-banner {
             position: fixed;
@@ -978,6 +1056,14 @@
 
         <!-- Gallery Tab -->
         <div id="gallery-tab" class="tab-content">
+            <!-- Background Jobs Status -->
+            <div id="backgroundJobsStatus" class="background-jobs-status" style="display: none;">
+                <div class="background-jobs-title">🔄 Background Generation</div>
+                <div id="backgroundJobsList" class="background-jobs-list">
+                    <!-- Active background jobs will be shown here -->
+                </div>
+            </div>
+            
             <div class="gallery-title">Your last 50 generations</div>
             <div class="gallery-subtitle">All content is stored offline in your device</div>
             <div id="galleryContent">
@@ -1071,9 +1157,467 @@
             }
         }
 
+        // Background Job Management System
+        let serviceWorkerRegistration = null;
+        const backgroundJobState = {
+            activeJobs: new Map(),
+            completedJobs: new Map()
+        };
+
+        // Persistent storage keys for background jobs
+        const STORAGE_KEYS = {
+            ACTIVE_JOBS: 'ai_media_gen_active_jobs',
+            COMPLETED_JOBS: 'ai_media_gen_completed_jobs'
+        };
+
+        // Save active jobs to localStorage for persistence
+        function saveJobStateToPersistentStorage() {
+            try {
+                const activeJobsData = Array.from(backgroundJobState.activeJobs.entries()).map(([id, job]) => [id, job]);
+                const completedJobsData = Array.from(backgroundJobState.completedJobs.entries()).map(([id, job]) => [id, job]);
+                
+                localStorage.setItem(STORAGE_KEYS.ACTIVE_JOBS, JSON.stringify(activeJobsData));
+                localStorage.setItem(STORAGE_KEYS.COMPLETED_JOBS, JSON.stringify(completedJobsData));
+                console.log('Job state saved to persistent storage');
+            } catch (error) {
+                console.error('Failed to save job state to storage:', error);
+            }
+        }
+
+        // Load active jobs from localStorage on startup
+        function loadJobStateFromPersistentStorage() {
+            try {
+                const activeJobsData = localStorage.getItem(STORAGE_KEYS.ACTIVE_JOBS);
+                const completedJobsData = localStorage.getItem(STORAGE_KEYS.COMPLETED_JOBS);
+                
+                if (activeJobsData) {
+                    const activeJobs = JSON.parse(activeJobsData);
+                    backgroundJobState.activeJobs = new Map(activeJobs);
+                    console.log('Restored', activeJobs.length, 'active jobs from storage');
+                }
+                
+                if (completedJobsData) {
+                    const completedJobs = JSON.parse(completedJobsData);
+                    backgroundJobState.completedJobs = new Map(completedJobs);
+                    console.log('Restored', completedJobs.length, 'completed jobs from storage');
+                }
+                
+                return backgroundJobState.activeJobs.size > 0;
+            } catch (error) {
+                console.error('Failed to load job state from storage:', error);
+                return false;
+            }
+        }
+
+        // Clean up completed jobs from storage (keep only recent ones)
+        function cleanupJobStorage() {
+            try {
+                const now = Date.now();
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                
+                // Clean completed jobs older than 24 hours
+                const completedJobs = Array.from(backgroundJobState.completedJobs.entries());
+                const recentCompletedJobs = completedJobs.filter(([id, job]) => {
+                    return (now - job.startedAt) < maxAge;
+                });
+                
+                backgroundJobState.completedJobs = new Map(recentCompletedJobs);
+                
+                // Clean any orphaned active jobs older than 2 hours (likely failed)
+                const activeJobs = Array.from(backgroundJobState.activeJobs.entries());
+                const validActiveJobs = activeJobs.filter(([id, job]) => {
+                    return (now - job.startedAt) < (2 * 60 * 60 * 1000);
+                });
+                
+                backgroundJobState.activeJobs = new Map(validActiveJobs);
+                
+                saveJobStateToPersistentStorage();
+                console.log('Cleaned up job storage');
+            } catch (error) {
+                console.error('Failed to cleanup job storage:', error);
+            }
+        }
+
+        // Initialize service worker communication
+        async function initServiceWorkerCommunication() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    // Load persistent job state first
+                    const hasActiveJobs = loadJobStateFromPersistentStorage();
+                    
+                    serviceWorkerRegistration = await navigator.serviceWorker.ready;
+                    console.log('Service worker ready for background jobs');
+                    
+                    // Listen for job status updates from service worker
+                    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+                    
+                    // Clean up old job data
+                    cleanupJobStorage();
+                    
+                    // Check for completed jobs on startup and sync with service worker
+                    await checkBackgroundJobStatus();
+                    
+                    // If we have active jobs, make sure UI reflects this
+                    if (hasActiveJobs) {
+                        console.log('Restoring background job UI for', backgroundJobState.activeJobs.size, 'active jobs');
+                        updateBackgroundJobsUI();
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to initialize service worker communication:', error);
+                }
+            }
+        }
+
+        // Handle messages from service worker
+        function handleServiceWorkerMessage(event) {
+            const { type, jobId, status, error } = event.data;
+            
+            if (type === 'JOB_STATUS_UPDATE') {
+                console.log('Job status update:', jobId, status);
+                
+                if (status === 'completed') {
+                    handleJobCompletion(jobId);
+                } else if (status === 'failed') {
+                    handleJobFailure(jobId, error);
+                }
+            }
+        }
+
+        // Send job to service worker for background processing
+        async function sendJobToServiceWorker(jobData) {
+            if (!serviceWorkerRegistration) {
+                throw new Error('Service worker not available');
+            }
+            
+            // Store job in local state
+            backgroundJobState.activeJobs.set(jobData.id, {
+                ...jobData,
+                startedAt: Date.now(),
+                status: 'pending'
+            });
+            
+            // Save to persistent storage
+            saveJobStateToPersistentStorage();
+            
+            // Send to service worker
+            serviceWorkerRegistration.active.postMessage({
+                type: 'START_BACKGROUND_JOB',
+                jobData: jobData
+            });
+            
+            console.log('Job sent to service worker:', jobData.id);
+        }
+
+        // Check background job status
+        async function checkBackgroundJobStatus() {
+            if (!serviceWorkerRegistration) return;
+            
+            return new Promise((resolve) => {
+                const messageChannel = new MessageChannel();
+                
+                messageChannel.port1.onmessage = (event) => {
+                    const { jobs } = event.data;
+                    console.log('Background jobs status from service worker:', jobs);
+                    
+                    // Sync service worker jobs with local state
+                    jobs.forEach(job => {
+                        if (job.status === 'completed' && !backgroundJobState.completedJobs.has(job.id)) {
+                            // Check if we have this job in our active jobs
+                            if (backgroundJobState.activeJobs.has(job.id)) {
+                                handleJobCompletion(job.id);
+                            } else {
+                                console.log('Found completed job not in local state:', job.id);
+                                // Add to local state and handle completion
+                                backgroundJobState.activeJobs.set(job.id, job);
+                                handleJobCompletion(job.id);
+                            }
+                        } else if (job.status === 'pending' && !backgroundJobState.activeJobs.has(job.id)) {
+                            // Service worker has pending job we don't know about
+                            console.log('Found pending job not in local state:', job.id);
+                            backgroundJobState.activeJobs.set(job.id, job);
+                            saveJobStateToPersistentStorage();
+                        }
+                    });
+                    
+                    // Update UI to reflect current state
+                    updateBackgroundJobsUI();
+                    
+                    resolve(jobs);
+                };
+                
+                serviceWorkerRegistration.active.postMessage(
+                    { type: 'CHECK_JOB_STATUS' },
+                    [messageChannel.port2]
+                );
+            });
+        }
+
+        // Handle job completion
+        async function handleJobCompletion(jobId) {
+            console.log('Handling job completion:', jobId);
+            
+            const job = backgroundJobState.activeJobs.get(jobId);
+            if (!job) {
+                console.log('Job not found in active jobs, checking service worker...');
+                return;
+            }
+            
+            // Move to completed jobs
+            backgroundJobState.completedJobs.set(jobId, job);
+            backgroundJobState.activeJobs.delete(jobId);
+            
+            // Save updated state to persistent storage
+            saveJobStateToPersistentStorage();
+            
+            // Get result from service worker's IndexedDB
+            await retrieveAndDisplayJobResult(job);
+        }
+
+        // Handle job failure
+        function handleJobFailure(jobId, error) {
+            console.log('Handling job failure:', jobId, error);
+            
+            const job = backgroundJobState.activeJobs.get(jobId);
+            if (job) {
+                backgroundJobState.activeJobs.delete(jobId);
+                
+                // Save updated state to persistent storage
+                saveJobStateToPersistentStorage();
+                
+                // Show error message
+                const errorElement = document.getElementById(job.type + 'ErrorMessage');
+                const errorText = document.getElementById(job.type + 'ErrorText');
+                
+                if (errorElement && errorText) {
+                    errorText.textContent = error || 'Background generation failed. Please try again.';
+                    errorElement.classList.add('show');
+                }
+                
+                // Reset UI
+                resetJobUI(job.type);
+            }
+        }
+
+        // Retrieve and display job result
+        async function retrieveAndDisplayJobResult(job) {
+            try {
+                // Access service worker's IndexedDB to get the result
+                const db = await openBackgroundJobDB();
+                const result = await getJobResult(db, job.id);
+                
+                if (result && result.resultBlob) {
+                    const dataUrl = URL.createObjectURL(result.resultBlob);
+                    
+                    if (job.type === 'video') {
+                        displayVideoResult(dataUrl, job);
+                    } else if (job.type === 'image') {
+                        displayImageResult(dataUrl, job);
+                    }
+                    
+                    // Save to gallery
+                    await saveToGallery(job.type, job.prompt, dataUrl, job.settings);
+                    
+                    // Auto-update gallery if user is currently viewing it
+                    refreshGalleryIfVisible();
+                    
+                    // Show success message
+                    const successElement = document.getElementById(job.type + 'SuccessMessage');
+                    if (successElement) {
+                        successElement.classList.add('show');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error retrieving job result:', error);
+                handleJobFailure(job.id, 'Failed to retrieve generated content');
+            }
+        }
+
+        // Check if gallery tab is currently visible and refresh it
+        function refreshGalleryIfVisible() {
+            const galleryTab = document.getElementById('gallery-tab');
+            if (galleryTab && galleryTab.classList.contains('active')) {
+                console.log('Gallery is visible, refreshing...');
+                loadGallery();
+            }
+        }
+
+        // Get currently active tab
+        function getCurrentActiveTab() {
+            const activeTab = document.querySelector('.tab-content.active');
+            if (activeTab) {
+                return activeTab.id.replace('-tab', '');
+            }
+            return null;
+        }
+
+        // Open background job database (same as service worker)
+        function openBackgroundJobDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('BackgroundJobsDB', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
+
+        // Get job result from database
+        function getJobResult(db, jobId) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['jobs'], 'readonly');
+                const store = transaction.objectStore('jobs');
+                const request = store.get(jobId);
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Display video result
+        function displayVideoResult(dataUrl, job) {
+            const videoContainer = document.getElementById('videoContainer');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const actionButtons = document.getElementById('videoActionButtons');
+            
+            videoPlayer.src = dataUrl;
+            videoContainer.classList.add('show');
+            actionButtons.classList.add('show');
+            
+            resetJobUI('video');
+        }
+
+        // Display image result
+        function displayImageResult(dataUrl, job) {
+            const imageContainer = document.getElementById('imageContainer');
+            const generatedImage = document.getElementById('generatedImage');
+            const actionButtons = document.getElementById('imageActionButtons');
+            
+            generatedImage.src = dataUrl;
+            imageContainer.classList.add('show');
+            actionButtons.classList.add('show');
+            
+            resetJobUI('image');
+        }
+
+        // Reset job UI elements
+        function resetJobUI(type) {
+            const submitBtn = document.getElementById(type + 'SubmitBtn');
+            const loading = document.getElementById(type + 'Loading');
+            
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = type === 'video' ? 'Generate Video' : 'Generate Image';
+            }
+            
+            if (loading) {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Update background jobs UI
+        function updateBackgroundJobsUI() {
+            const statusElement = document.getElementById('backgroundJobsStatus');
+            const listElement = document.getElementById('backgroundJobsList');
+            
+            const activeJobs = Array.from(backgroundJobState.activeJobs.values());
+            
+            if (activeJobs.length === 0) {
+                statusElement.style.display = 'none';
+                return;
+            }
+            
+            statusElement.style.display = 'block';
+            
+            listElement.innerHTML = activeJobs.map(job => {
+                const timeElapsed = Math.floor((Date.now() - job.startedAt) / 1000);
+                const minutes = Math.floor(timeElapsed / 60);
+                const seconds = timeElapsed % 60;
+                const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                
+                return `
+                    <div class="background-job-item">
+                        <div class="background-job-icon">${job.type === 'video' ? '🎬' : '🎨'}</div>
+                        <div class="background-job-content">
+                            <div class="background-job-type">${job.type} Generation</div>
+                            <div class="background-job-prompt">${job.prompt}</div>
+                            <div class="background-job-time">Running for ${timeText}</div>
+                        </div>
+                        <div class="background-job-spinner"></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Enhanced job management with better UI sync
+        const originalSendJobToServiceWorker = sendJobToServiceWorker;
+        sendJobToServiceWorker = async function(jobData) {
+            await originalSendJobToServiceWorker(jobData);
+            updateBackgroundJobsUI();
+            
+            // Also refresh gallery UI if we're on gallery tab to show background jobs
+            if (getCurrentActiveTab() === 'gallery') {
+                updateBackgroundJobsUI();
+            }
+        };
+
+        const originalHandleJobCompletion = handleJobCompletion;
+        handleJobCompletion = async function(jobId) {
+            await originalHandleJobCompletion(jobId);
+            updateBackgroundJobsUI();
+            
+            // Add a small delay to ensure gallery refresh happens after save
+            setTimeout(() => {
+                refreshGalleryIfVisible();
+            }, 100);
+        };
+
+        const originalHandleJobFailure = handleJobFailure;
+        handleJobFailure = function(jobId, error) {
+            originalHandleJobFailure(jobId, error);
+            updateBackgroundJobsUI();
+        };
+
         // Document ready handler
         document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
+            initServiceWorkerCommunication();
+            
+            // Update background jobs UI every 5 seconds
+            setInterval(updateBackgroundJobsUI, 5000);
+            
+            // Periodic sync with service worker every 10 seconds when there are active jobs
+            setInterval(async () => {
+                if (backgroundJobState.activeJobs.size > 0 && serviceWorkerRegistration) {
+                    console.log('Periodic sync: checking background job status');
+                    await checkBackgroundJobStatus();
+                }
+            }, 10000);
+        });
+
+        // Handle app focus/resume to check for completed jobs
+        window.addEventListener('focus', function() {
+            console.log('App focused, checking for completed jobs...');
+            if (serviceWorkerRegistration) {
+                checkBackgroundJobStatus();
+                
+                // Also refresh gallery if visible
+                refreshGalleryIfVisible();
+            }
+        });
+
+        // Handle page visibility change (mobile background/foreground)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                console.log('App became visible, checking for completed jobs...');
+                if (serviceWorkerRegistration) {
+                    checkBackgroundJobStatus();
+                    
+                    // Also refresh gallery if visible
+                    setTimeout(() => {
+                        refreshGalleryIfVisible();
+                    }, 500);
+                }
+            }
         });
 
         // Setup all event listeners
@@ -1148,6 +1692,7 @@
             // Load gallery if switching to gallery tab
             if (tabName === 'gallery') {
                 loadGallery();
+                updateBackgroundJobsUI();
             }
         }
 
@@ -1163,14 +1708,13 @@
             }
         });
 
-        // Video Form Handler
+        // Video Form Handler (Background Processing)
         document.getElementById('videoForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const submitBtn = document.getElementById('videoSubmitBtn');
             const loading = document.getElementById('videoLoading');
             const videoContainer = document.getElementById('videoContainer');
-            const videoPlayer = document.getElementById('videoPlayer');
             const successMessage = document.getElementById('videoSuccessMessage');
             const errorMessage = document.getElementById('videoErrorMessage');
             const errorText = document.getElementById('videoErrorText');
@@ -1184,7 +1728,7 @@
                 successMessage.classList.remove('show');
                 errorMessage.classList.remove('show');
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Generating...';
+                submitBtn.textContent = 'Generating in Background...';
                 loading.classList.add('show');
                 
                 // Collapse the form settings
@@ -1212,70 +1756,56 @@
                   }
                 ];
 
-                console.log('Sending video JSON payload:', JSON.stringify(payload, null, 2));
-
-                const webhookUrl = 'https://n8n.xtend3d.com/webhook/sora-video-gen';
-                
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
+                // Create job data for service worker
+                const jobData = {
+                    id: 'video_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    type: 'video',
+                    webhookUrl: 'https://n8n.xtend3d.com/webhook/sora-video-gen',
                     headers: {
                         'Content-Type': 'application/json',
                         'azure': 'xtend3d',
                         'X-Device-Fingerprint': generateDeviceFingerprint(),
                         'X-Request-Timestamp': Date.now().toString()
                     },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    let errorData;
-                    try {
-                        errorData = await response.json();
-                    } catch (err) {
-                        errorData = { message: 'The server returned an error, but the response was not valid JSON.' };
+                    payload: payload,
+                    prompt: document.getElementById('videoDescription').value,
+                    settings: {
+                        duration: document.querySelector('input[name="duration"]:checked').value,
+                        aspectRatio: document.querySelector('input[name="aspectRatio"]:checked').value,
+                        format: document.querySelector('input[name="format"]:checked').value
                     }
-                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-                }
+                };
 
-                const videoBlob = await response.blob();
+                console.log('Sending video job to service worker:', jobData.id);
+
+                // Send to service worker
+                await sendJobToServiceWorker(jobData);
                 
-                if (!videoBlob.type.startsWith('video/')) {
-                    throw new Error(`Expected video data, but received type: ${videoBlob.type}. Please check the webhook response.`);
+                // Update loading text to show background processing
+                const loadingText = document.querySelector('#videoLoading .loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Generating in background... You can minimize the app safely.';
                 }
-
-                const videoUrl = URL.createObjectURL(videoBlob);
-                videoPlayer.src = videoUrl;
-
-                successMessage.classList.add('show');
-                videoContainer.classList.add('show');
-                document.getElementById('videoActionButtons').classList.add('show');
-                
-                // Save to gallery
-                saveToGallery('video', document.getElementById('videoDescription').value, videoUrl, {
-                    duration: document.querySelector('input[name="duration"]:checked').value,
-                    aspectRatio: document.querySelector('input[name="aspectRatio"]:checked').value,
-                    format: document.querySelector('input[name="format"]:checked').value
-                });
 
             } catch (error) {
-                console.error('Video webhook request failed:', error);
-                errorText.textContent = error.message || 'An unknown error occurred. Please try again.';
+                console.error('Failed to start background video job:', error);
+                errorText.textContent = error.message || 'Failed to start background generation. Please try again.';
                 errorMessage.classList.add('show');
-            } finally {
+                
+                // Reset UI on error
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Generate Video';
                 loading.classList.remove('show');
             }
         });
 
-        // Image Form Handler
+        // Image Form Handler (Background Processing)
         document.getElementById('imageForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const submitBtn = document.getElementById('imageSubmitBtn');
             const loading = document.getElementById('imageLoading');
             const imageContainer = document.getElementById('imageContainer');
-            const generatedImage = document.getElementById('generatedImage');
             const successMessage = document.getElementById('imageSuccessMessage');
             const errorMessage = document.getElementById('imageErrorMessage');
             const errorText = document.getElementById('imageErrorText');
@@ -1289,7 +1819,7 @@
                 successMessage.classList.remove('show');
                 errorMessage.classList.remove('show');
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Generating...';
+                submitBtn.textContent = 'Generating in Background...';
                 loading.classList.add('show');
                 
                 // Collapse the form settings
@@ -1306,72 +1836,69 @@
             }
 
             try {
-                // Prepare form data
-                const formData = new FormData();
+                // Prepare form data for service worker (convert to serializable format)
+                const formFields = {
+                    prompt: document.getElementById('imagePrompt').value,
+                    size: document.querySelector('input[name="size"]:checked').value,
+                    quality: document.querySelector('input[name="quality"]:checked').value,
+                    output_format: document.querySelector('input[name="outputFormat"]:checked').value,
+                    n: '1'
+                };
                 
-                // Add required fields
-                formData.append('prompt', document.getElementById('imagePrompt').value);
-                formData.append('size', document.querySelector('input[name="size"]:checked').value);
-                formData.append('quality', document.querySelector('input[name="quality"]:checked').value);
-                formData.append('output_format', document.querySelector('input[name="outputFormat"]:checked').value);
-                formData.append('n', '1');
-                
-                // Add optional input image if provided
+                // Handle optional input image
                 const inputImage = document.getElementById('inputImage').files[0];
+                let imageArrayBuffer = null;
+                let imageFileName = null;
+                let imageType = null;
+                
                 if (inputImage) {
-                    formData.append('image', inputImage);
+                    imageArrayBuffer = await inputImage.arrayBuffer();
+                    imageFileName = inputImage.name;
+                    imageType = inputImage.type;
                 }
 
-                console.log('Sending image generation request...');
-
-                const webhookUrl = 'https://n8n.xtend3d.com/webhook/gpt-image-1';
-                
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
+                // Create job data for service worker
+                const jobData = {
+                    id: 'image_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    type: 'image',
+                    webhookUrl: 'https://n8n.xtend3d.com/webhook/gpt-image-1',
                     headers: {
                         'azure': 'xtend3d',
                         'X-Device-Fingerprint': generateDeviceFingerprint(),
                         'X-Request-Timestamp': Date.now().toString()
                     },
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    let errorData;
-                    try {
-                        errorData = await response.json();
-                    } catch (err) {
-                        errorData = { message: 'The server returned an error, but the response was not valid JSON.' };
+                    formFields: formFields,
+                    imageData: imageArrayBuffer ? {
+                        buffer: imageArrayBuffer,
+                        fileName: imageFileName,
+                        type: imageType
+                    } : null,
+                    prompt: document.getElementById('imagePrompt').value,
+                    settings: {
+                        size: document.querySelector('input[name="size"]:checked').value,
+                        quality: document.querySelector('input[name="quality"]:checked').value,
+                        outputFormat: document.querySelector('input[name="outputFormat"]:checked').value,
+                        hasInputImage: !!inputImage
                     }
-                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-                }
+                };
 
-                const imageBlob = await response.blob();
+                console.log('Sending image job to service worker:', jobData.id);
+
+                // Send to service worker
+                await sendJobToServiceWorker(jobData);
                 
-                if (!imageBlob.type.startsWith('image/')) {
-                    throw new Error(`Expected image data, but received type: ${imageBlob.type}. Please check the webhook response.`);
+                // Update loading text to show background processing
+                const loadingText = document.querySelector('#imageLoading .loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Generating in background... You can minimize the app safely.';
                 }
-
-                const imageUrl = URL.createObjectURL(imageBlob);
-                generatedImage.src = imageUrl;
-
-                successMessage.classList.add('show');
-                imageContainer.classList.add('show');
-                document.getElementById('imageActionButtons').classList.add('show');
-                
-                // Save to gallery (works for both new images and edited images)
-                saveToGallery('image', document.getElementById('imagePrompt').value, imageUrl, {
-                    size: document.querySelector('input[name="size"]:checked').value,
-                    quality: document.querySelector('input[name="quality"]:checked').value,
-                    outputFormat: document.querySelector('input[name="outputFormat"]:checked').value,
-                    hasInputImage: !!document.getElementById('inputImage').files[0]
-                });
 
             } catch (error) {
-                console.error('Image webhook request failed:', error);
-                errorText.textContent = error.message || 'An unknown error occurred. Please try again.';
+                console.error('Failed to start background image job:', error);
+                errorText.textContent = error.message || 'Failed to start background generation. Please try again.';
                 errorMessage.classList.add('show');
-            } finally {
+                
+                // Reset UI on error
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Generate Image';
                 loading.classList.remove('show');
