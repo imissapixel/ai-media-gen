@@ -1172,7 +1172,12 @@
     </div>
 
     <script>
-        // Webhook throttling system
+        // Client-side Webhook Throttling System
+        // Purpose: This system is primarily a UX enhancement to prevent users from
+        // accidentally sending multiple rapid requests (e.g., double-clicking the generate button).
+        // It helps avoid unnecessary duplicate processing and user frustration.
+        // IMPORTANT: This is NOT a robust security measure against deliberate abuse or attacks.
+        // True rate limiting and security must be implemented server-side on the webhook endpoints.
         const WEBHOOK_THROTTLE_DURATION = 15000; // 15 seconds
         const webhookThrottleState = {
             lastVideoCall: 0,
@@ -1180,7 +1185,9 @@
             deviceFingerprint: null
         };
 
-        // Generate a device fingerprint for client-side identification
+        // Generate a device fingerprint for client-side identification.
+        // This is a basic heuristic and not a foolproof security measure.
+        // It's used here as part of the client-side UX throttling strategy and potentially for server-side logging.
         function generateDeviceFingerprint() {
             if (webhookThrottleState.deviceFingerprint) {
                 return webhookThrottleState.deviceFingerprint;
@@ -1212,7 +1219,10 @@
             return webhookThrottleState.deviceFingerprint;
         }
 
-        // Check if webhook call is allowed (client-side throttling)
+        // Check if a webhook call is allowed based on the client-side throttle.
+        // This is primarily for UX to prevent rapid duplicate submissions.
+        // It is NOT a security feature and can be bypassed by a malicious client.
+        // Server-side rate limiting is essential for actual security.
         function canCallWebhook(type) {
             const now = Date.now();
             const lastCall = type === 'video' ? webhookThrottleState.lastVideoCall : webhookThrottleState.lastImageCall;
@@ -1237,6 +1247,14 @@
 
         // Background Job Management System
         let serviceWorkerRegistration = null;
+
+        // Helper function to sanitize HTML
+        function sanitizeHTML(text) {
+            const temp = document.createElement('div');
+            temp.textContent = text;
+            return temp.innerHTML;
+        }
+
         const backgroundJobState = {
             activeJobs: new Map(),
             completedJobs: new Map()
@@ -2533,7 +2551,8 @@
                                    '• Gallery history\n' +
                                    '• Background jobs\n' +
                                    '• App settings and preferences\n' +
-                                   '• Service worker cache\n\n' +
+                                   '• Service worker cache\n' +
+                                   '• Your current session will be logged out\n\n' +
                                    'This action cannot be undone. Are you sure you want to continue?';
 
               if (confirm(confirmMessage)) {
@@ -2577,35 +2596,22 @@
                           );
                       }
 
-                      // Clear only authentication cookies for this subdomain
-                      // Get all cookies and clear only authentication-related ones
-                      const cookies = document.cookie.split(";");
-                      const authCookieNames = ['session', 'auth', 'token', 'login', 'authenticated', 'access'];
-                      
-                      cookies.forEach(function(cookie) {
-                          const eqPos = cookie.indexOf("=");
-                          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-                          
-                          // Only clear cookies that appear to be authentication-related
-                          if (name && authCookieNames.some(authName => name.toLowerCase().includes(authName))) {
-                              // Clear cookie for this domain and subdomain
-                              const pathsAndDomains = [
-                                  { path: "/", domain: "" },
-                                  { path: "/", domain: window.location.hostname },
-                                  { path: "/", domain: "." + window.location.hostname.split('.').slice(-2).join('.') }
-                              ];
-                              
-                              pathsAndDomains.forEach(function(combo) {
-                                  let cookieString = name + "=;expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-                                  if (combo.path) cookieString += "path=" + combo.path + ";";
-                                  if (combo.domain) cookieString += "domain=" + combo.domain + ";";
-                                  document.cookie = cookieString;
-                              });
+                      // Clear HttpOnly authentication cookie by calling the logout endpoint.
+                      // Client-side JavaScript cannot directly delete HttpOnly cookies.
+                      // The server, upon receiving a /logout request, will clear its session cookie.
+                      try {
+                          const response = await fetch('/logout', { method: 'POST' });
+                          if (!response.ok) {
+                              console.warn('Logout request failed, server might not have cleared session cookie.', response.status);
+                          } else {
+                              console.log('Logout request successful, server should have cleared session cookie.');
                           }
-                      });
+                      } catch (fetchError) {
+                          console.warn('Fetch call to /logout failed. Session cookie might not be cleared.', fetchError);
+                      }
 
                       // Show success message briefly before reload
-                      alert('All browser data has been cleared successfully. The page will now reload.');
+                      alert('All browser data has been cleared, and you have been logged out. The page will now reload.');
 
                       // Reload the page
                       window.location.reload(true);

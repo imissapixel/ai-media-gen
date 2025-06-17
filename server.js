@@ -21,12 +21,13 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'"],
+            scriptSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "blob:"],
             connectSrc: ["'self'", "https://n8n.xtend3d.com", "blob:"],
             mediaSrc: ["'self'", "blob:"],
             workerSrc: ["'self'"],
-            manifestSrc: ["'self'"]
+            manifestSrc: ["'self'"],
+            frameAncestors: ["'self'"]
         }
     }
 }));
@@ -82,7 +83,16 @@ async function initializePassword() {
         
         fs.writeFileSync(envPath, envContent);
         console.log('✅ Password hash generated and saved to .env');
-        console.log('💡 You can now remove ACCESS_PASSWORD from .env if desired');
+
+        // Now, remove ACCESS_PASSWORD from .env file
+        let updatedEnvContent = fs.readFileSync(envPath, 'utf8');
+        const lines = updatedEnvContent.split('\n');
+        const filteredLines = lines.filter(line => !line.startsWith('ACCESS_PASSWORD='));
+        updatedEnvContent = filteredLines.join('\n');
+
+        // Write the cleaned content back
+        fs.writeFileSync(envPath, updatedEnvContent);
+        console.log('🗑️ ACCESS_PASSWORD has been automatically removed from .env for security.');
         
     } catch (error) {
         console.error('❌ Error initializing password:', error);
@@ -180,7 +190,7 @@ app.post('/login', rateLimitLogin, async (req, res) => {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
-                sameSite: 'lax'
+                sameSite: 'Strict'
             });
             
             console.log(`✅ Successful login at ${new Date().toISOString()}`);
