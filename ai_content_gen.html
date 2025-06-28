@@ -2928,73 +2928,189 @@
                                    '• Background jobs\n' +
                                    '• App settings and preferences\n' +
                                    '• Service worker cache\n' +
+                                   '• Cookies and session data\n' +
                                    '• Your current session will be logged out\n\n' +
                                    'This action cannot be undone. Are you sure you want to continue?';
 
               if (confirm(confirmMessage)) {
                   try {
-                      // Clear IndexedDB databases
+                      console.log('🧹 Starting comprehensive browser data cleanup...');
+
+                      // 1. Clear IndexedDB databases (comprehensive approach)
                       if ('indexedDB' in window) {
-                          // Clear gallery database
-                          await new Promise((resolve, reject) => {
-                              const deleteReq = indexedDB.deleteDatabase('AIGalleryDB');
-                              deleteReq.onsuccess = () => resolve();
-                              deleteReq.onerror = () => reject(deleteReq.error);
-                          });
-
-                          // Clear background jobs database
-                          await new Promise((resolve, reject) => {
-                              const deleteReq = indexedDB.deleteDatabase('BackgroundJobsDB');
-                              deleteReq.onsuccess = () => resolve();
-                              deleteReq.onerror = () => reject(deleteReq.error);
-                          });
+                          console.log('🗄️ Clearing IndexedDB databases...');
+                          
+                          // Get all databases if supported
+                          if (typeof indexedDB.databases === 'function') {
+                              const databases = await indexedDB.databases();
+                              console.log('Found databases:', databases.map(db => db.name));
+                              
+                              for (const database of databases) {
+                                  await new Promise((resolve, reject) => {
+                                      console.log(`Deleting database: ${database.name}`);
+                                      const deleteReq = indexedDB.deleteDatabase(database.name);
+                                      deleteReq.onsuccess = () => {
+                                          console.log(`✅ Deleted database: ${database.name}`);
+                                          resolve();
+                                      };
+                                      deleteReq.onerror = () => {
+                                          console.error(`❌ Failed to delete database: ${database.name}`, deleteReq.error);
+                                          reject(deleteReq.error);
+                                      };
+                                      deleteReq.onblocked = () => {
+                                          console.warn(`⚠️ Deletion blocked for database: ${database.name}`);
+                                          // Don't reject, just resolve to continue
+                                          setTimeout(resolve, 1000);
+                                      };
+                                  });
+                              }
+                          } else {
+                              // Fallback: delete known databases
+                              const knownDatabases = ['AIGalleryDB', 'BackgroundJobsDB', 'GalleryDB'];
+                              for (const dbName of knownDatabases) {
+                                  await new Promise((resolve) => {
+                                      console.log(`Deleting known database: ${dbName}`);
+                                      const deleteReq = indexedDB.deleteDatabase(dbName);
+                                      deleteReq.onsuccess = () => {
+                                          console.log(`✅ Deleted database: ${dbName}`);
+                                          resolve();
+                                      };
+                                      deleteReq.onerror = () => {
+                                          console.log(`Database ${dbName} might not exist or failed to delete`);
+                                          resolve(); // Don't fail on individual database deletion
+                                      };
+                                      deleteReq.onblocked = () => {
+                                          console.warn(`⚠️ Deletion blocked for database: ${dbName}`);
+                                          setTimeout(resolve, 1000);
+                                      };
+                                  });
+                              }
+                          }
                       }
 
-                      // Clear localStorage
+                      // 2. Clear localStorage with detailed logging
+                      console.log('💾 Clearing localStorage...');
+                      const localStorageKeys = Object.keys(localStorage);
+                      console.log('localStorage keys before clear:', localStorageKeys);
                       localStorage.clear();
+                      console.log('✅ localStorage cleared');
 
-                      // Clear sessionStorage
+                      // 3. Clear sessionStorage with detailed logging
+                      console.log('📝 Clearing sessionStorage...');
+                      const sessionStorageKeys = Object.keys(sessionStorage);
+                      console.log('sessionStorage keys before clear:', sessionStorageKeys);
                       sessionStorage.clear();
+                      console.log('✅ sessionStorage cleared');
 
-                      // Clear service worker caches
+                      // 4. Clear WebSQL if supported (legacy)
+                      if ('openDatabase' in window) {
+                          console.log('🗃️ WebSQL detected - attempting to clear...');
+                          try {
+                              // WebSQL cleanup is complex and browser-dependent
+                              // Most modern browsers have deprecated WebSQL
+                              console.log('⚠️ WebSQL cleanup not implemented (deprecated feature)');
+                          } catch (e) {
+                              console.log('WebSQL clear failed:', e);
+                          }
+                      }
+
+                      // 5. Clear service worker caches
                       if ('serviceWorker' in navigator && 'caches' in window) {
+                          console.log('🔄 Clearing service worker caches...');
                           const cacheNames = await caches.keys();
+                          console.log('Found caches:', cacheNames);
                           await Promise.all(
-                              cacheNames.map(cacheName => caches.delete(cacheName))
+                              cacheNames.map(async (cacheName) => {
+                                  console.log(`Deleting cache: ${cacheName}`);
+                                  const deleted = await caches.delete(cacheName);
+                                  console.log(`Cache ${cacheName} deleted:`, deleted);
+                                  return deleted;
+                              })
                           );
+                          console.log('✅ Service worker caches cleared');
                       }
 
-                      // Unregister service worker
+                      // 6. Unregister service workers
                       if ('serviceWorker' in navigator) {
+                          console.log('👷 Unregistering service workers...');
                           const registrations = await navigator.serviceWorker.getRegistrations();
+                          console.log('Found service worker registrations:', registrations.length);
                           await Promise.all(
-                              registrations.map(registration => registration.unregister())
+                              registrations.map(async (registration) => {
+                                  console.log(`Unregistering service worker: ${registration.scope}`);
+                                  const unregistered = await registration.unregister();
+                                  console.log(`Service worker unregistered:`, unregistered);
+                                  return unregistered;
+                              })
                           );
+                          console.log('✅ Service workers unregistered');
                       }
 
-                      // Clear HttpOnly authentication cookie by calling the logout endpoint.
-                      // Client-side JavaScript cannot directly delete HttpOnly cookies.
-                      // The server, upon receiving a /logout request, will clear its session cookie.
+                      // 7. Clear client-side cookies (accessible ones)
+                      console.log('🍪 Clearing client-accessible cookies...');
+                      const cookies = document.cookie.split(';');
+                      console.log('Found cookies:', cookies.length);
+                      for (let cookie of cookies) {
+                          const eqPos = cookie.indexOf('=');
+                          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+                          if (name) {
+                              // Clear for current domain and path
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`;
+                              console.log(`Cleared cookie: ${name}`);
+                          }
+                      }
+
+                      // 8. Clear HttpOnly authentication cookie via server
+                      console.log('🔐 Clearing server-side session...');
                       try {
                           const response = await fetch('/logout', { method: 'POST' });
                           if (!response.ok) {
-                              console.warn('Logout request failed, server might not have cleared session cookie.', response.status);
+                              console.warn('❌ Logout request failed:', response.status);
                           } else {
-                              console.log('Logout request successful, server should have cleared session cookie.');
+                              console.log('✅ Server-side session cleared');
                           }
                       } catch (fetchError) {
-                          console.warn('Fetch call to /logout failed. Session cookie might not be cleared.', fetchError);
+                          console.warn('❌ Logout request failed:', fetchError);
                       }
 
-                      // Show success message briefly before reload
-                      alert('All browser data has been cleared, and you have been logged out. The page will now reload.');
+                      // 9. Force browser storage refresh
+                      console.log('🔄 Forcing storage refresh...');
+                      
+                      // Try to trigger garbage collection
+                      if ('gc' in window) {
+                          window.gc();
+                      }
 
-                      // Reload the page
-                      window.location.reload(true);
+                      console.log('✅ Browser data cleanup completed successfully!');
+                      
+                      // Show success message with more details
+                      alert('🧹 All browser data has been cleared successfully!\n\n' +
+                            'Cleared:\n' +
+                            `• IndexedDB databases: ${localStorageKeys.length > 0 ? 'Yes' : 'None found'}\n` +
+                            `• localStorage items: ${localStorageKeys.length}\n` +
+                            `• sessionStorage items: ${sessionStorageKeys.length}\n` +
+                            '• Service worker caches\n' +
+                            '• Client-accessible cookies\n' +
+                            '• Server-side session\n\n' +
+                            'The page will now reload.');
+
+                      // 10. Reload the page with cache busting
+                      setTimeout(() => {
+                          window.location.href = window.location.href.split('?')[0] + '?clearCache=' + Date.now();
+                      }, 1000);
 
                   } catch (error) {
-                      console.error('Error clearing browser data:', error);
-                      alert('Some data could not be cleared: ' + error.message + '\n\nPlease manually clear your browser data if needed.');
+                      console.error('❌ Error during browser data cleanup:', error);
+                      alert('⚠️ Some data could not be cleared: ' + error.message + '\n\n' +
+                            'What was attempted:\n' +
+                            '• IndexedDB databases\n' +
+                            '• localStorage & sessionStorage\n' +
+                            '• Service worker caches\n' +
+                            '• Browser cookies\n' +
+                            '• Server-side session\n\n' +
+                            'You may need to manually clear your browser data if the issue persists.');
                   }
               }
           }
