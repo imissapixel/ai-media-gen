@@ -1832,6 +1832,359 @@
             }
         }
 
+        // Show image settings
+        function showImageSettings() {
+            document.getElementById('imageForm').classList.remove('settings-collapsed');
+            document.getElementById('imageForm').classList.add('settings-expanded');
+            document.getElementById('imageActionButtons').classList.remove('show');
+            document.getElementById('imageContainer').classList.remove('show');
+            document.getElementById('imageSuccessMessage').classList.remove('show');
+        }
+
+        // Download generated image
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.href = document.getElementById('generatedImage').src;
+            link.download = `ai-image-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Show video settings
+        function showVideoSettings() {
+            document.getElementById('videoForm').classList.remove('settings-collapsed');
+            document.getElementById('videoForm').classList.add('settings-expanded');
+            document.getElementById('videoActionButtons').classList.remove('show');
+            document.getElementById('videoContainer').classList.remove('show');
+            document.getElementById('videoSuccessMessage').classList.remove('show');
+        }
+
+        // Download generated video
+        function downloadVideo() {
+            const link = document.createElement('a');
+            link.href = document.getElementById('videoPlayer').src;
+            link.download = `ai-video-${Date.now()}.mp4`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Gallery Database Helper Functions
+        function openGalleryDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('GalleryDB', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('gallery')) {
+                        db.createObjectStore('gallery', { keyPath: 'id' });
+                    }
+                };
+            });
+        }
+
+        function deleteFromGalleryDB(db, id) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['gallery'], 'readwrite');
+                const store = transaction.objectStore('gallery');
+                const request = store.delete(id);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function clearGalleryDB(db) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['gallery'], 'readwrite');
+                const store = transaction.objectStore('gallery');
+                const request = store.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Save generated content to gallery
+        async function saveToGallery(type, prompt, dataUrl, settings) {
+            try {
+                // Convert blob url to base64 to store in IndexedDB
+                const response = await fetch(dataUrl);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = async () => {
+                    const base64data = reader.result;
+
+                    const db = await openGalleryDB();
+                    const transaction = db.transaction(['gallery'], 'readwrite');
+                    const store = transaction.objectStore('gallery');
+
+                    const id = `${type}_${Date.now()}`;
+                    const item = {
+                        id,
+                        type,
+                        prompt,
+                        dataUrl: base64data,
+                        settings,
+                        createdAt: new Date()
+                    };
+
+                    await new Promise((resolve, reject) => {
+                        const request = store.put(item);
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+
+                    console.log('Saved to gallery:', id);
+                };
+            } catch (error) {
+                console.error('Error saving to gallery:', error);
+            }
+        }
+
+        // Load gallery items from IndexedDB
+        async function loadGallery() {
+            const galleryContent = document.getElementById('galleryContent');
+            galleryContent.innerHTML = '<div class="loading-spinner"></div>'; // Show loader
+
+            try {
+                const db = await openGalleryDB();
+                const transaction = db.transaction(['gallery'], 'readonly');
+                const store = transaction.objectStore('gallery');
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const items = request.result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    
+                    if (items.length === 0) {
+                        galleryContent.innerHTML = `
+                            <div class="gallery-empty">
+                                <div class="gallery-empty-icon">🖼️</div>
+                                <div>Your generated images and videos will appear here.</div>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    const grid = document.createElement('div');
+                    grid.className = 'gallery-grid';
+
+                    items.slice(0, 50).forEach(item => {
+                        const itemElement = document.createElement('div');
+                        itemElement.className = 'gallery-item';
+                        itemElement.addEventListener('click', () => openModal(item));
+
+                        const mediaElement = item.type === 'video'
+                            ? document.createElement('video')
+                            : document.createElement('img');
+                        
+                        mediaElement.src = item.dataUrl;
+                        mediaElement.className = 'gallery-item-media';
+                        if (item.type === 'video') {
+                            mediaElement.muted = true;
+                            mediaElement.playsInline = true;
+                            mediaElement.autoplay = true;
+                            mediaElement.loop = true;
+                        }
+
+
+                        const typeIcon = document.createElement('div');
+                        typeIcon.className = 'gallery-item-type';
+                        typeIcon.textContent = item.type === 'video' ? '🎬' : '🎨';
+
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'gallery-item-delete';
+                        deleteBtn.innerHTML = '&times;';
+                        deleteBtn.setAttribute('data-action', 'delete-gallery-item');
+                        deleteBtn.setAttribute('data-item-id', item.id);
+
+                        itemElement.appendChild(mediaElement);
+                        itemElement.appendChild(typeIcon);
+                        itemElement.appendChild(deleteBtn);
+                        grid.appendChild(itemElement);
+                    });
+
+                    galleryContent.innerHTML = '';
+                    galleryContent.appendChild(grid);
+                };
+
+                request.onerror = (event) => {
+                    throw new Error('Error fetching gallery items: ' + event.target.error);
+                };
+
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+                galleryContent.innerHTML = `
+                    <div class="gallery-empty">
+                        <div class="gallery-empty-icon">⚠️</div>
+                        <div>Could not load the gallery.</div>
+                        <div style="font-size: 12px; color: #a0aec0;">${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Open modal for full-size viewing
+        function openModal(item) {
+            const modal = document.getElementById('mediaModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalVideo = document.getElementById('modalVideo');
+            const modalPrompt = document.getElementById('modalPrompt');
+            const modalSettings = document.getElementById('modalSettings');
+            const modalDate = document.getElementById('modalDate');
+
+            modalPrompt.textContent = item.prompt;
+            modalSettings.innerHTML = Object.entries(item.settings)
+                .map(([key, value]) => `<span><strong>${key.replace(/([A-Z])/g, ' $1')}:</strong> ${value}</span>`)
+                .join('');
+            modalDate.textContent = new Date(item.createdAt).toLocaleString();
+
+            if (item.type === 'image') {
+                modalImage.src = item.dataUrl;
+                modalImage.style.display = 'block';
+                modalVideo.style.display = 'none';
+                modalVideo.src = '';
+            } else {
+                modalVideo.src = item.dataUrl;
+                modalVideo.style.display = 'block';
+                modalImage.style.display = 'none';
+                modalImage.src = '';
+            }
+
+            modal.classList.add('show');
+        }
+
+        // Close modal
+        function closeModal() {
+            const modal = document.getElementById('mediaModal');
+            modal.classList.remove('show');
+            // Stop video playback
+            document.getElementById('modalVideo').pause();
+        }
+
+        // Clear all browser data
+        async function clearAllBrowserData() {
+            if (!confirm('Are you sure you want to clear ALL browser data? This will remove all generated content, settings, and active jobs. This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                console.log('Clearing all browser data...');
+
+                // 1. Unregister all service workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        console.log('Service worker unregistered');
+                    }
+                }
+
+                // 2. Clear all caches
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(key => caches.delete(key)));
+                    console.log('Caches cleared');
+                }
+
+                // 3. Delete all IndexedDB databases
+                if ('indexedDB' in window && typeof indexedDB.databases === 'function') {
+                    const dbs = await indexedDB.databases();
+                    await Promise.all(dbs.map(db => new Promise((resolve, reject) => {
+                        console.log(`Deleting IndexedDB: ${db.name}`);
+                        const deleteRequest = indexedDB.deleteDatabase(db.name);
+                        deleteRequest.onsuccess = () => {
+                            console.log(`Deleted ${db.name}`);
+                            resolve();
+                        };
+                        deleteRequest.onerror = (event) => {
+                            console.error(`Error deleting ${db.name}`, event.target.error);
+                            reject(deleteRequest.error);
+                        };
+                        deleteRequest.onblocked = () => {
+                            console.warn(`Deletion of ${db.name} is blocked.`);
+                            reject(new Error(`Deletion of ${db.name} is blocked.`));
+                        };
+                    })));
+                    console.log('IndexedDBs cleared');
+                } else {
+                    // Fallback for browsers that don't support indexedDB.databases()
+                    // Manually delete known databases
+                    await new Promise((resolve, reject) => {
+                        const req = indexedDB.deleteDatabase('BackgroundJobsDB');
+                        req.onsuccess = resolve;
+                        req.onerror = reject;
+                    });
+                     await new Promise((resolve, reject) => {
+                        const req = indexedDB.deleteDatabase('GalleryDB');
+                        req.onsuccess = resolve;
+                        req.onerror = reject;
+                    });
+                    console.log('Known IndexedDBs cleared');
+                }
+
+
+                // 4. Clear localStorage and sessionStorage
+                localStorage.clear();
+                sessionStorage.clear();
+                console.log('Local and session storage cleared');
+
+                alert('All browser data has been cleared. The application will now reload.');
+                window.location.reload();
+
+            } catch (error) {
+                console.error('Error clearing browser data:', error);
+                alert(`An error occurred while clearing data: ${error.message}. You may need to clear data manually in your browser settings.`);
+            }
+        }
+
+        // Delete a single gallery item
+        async function deleteGalleryItem(itemId, event) {
+            event.stopPropagation(); // Prevent modal from opening
+
+            if (!confirm('Are you sure you want to delete this item?')) {
+                return;
+            }
+
+            try {
+                const db = await openGalleryDB();
+                await deleteFromGalleryDB(db, itemId);
+
+                // Remove from UI
+                const itemElement = event.target.closest('.gallery-item');
+                if (itemElement) {
+                    itemElement.remove();
+                }
+
+                // Check if gallery is now empty
+                const galleryGrid = document.querySelector('.gallery-grid');
+                if (galleryGrid && galleryGrid.children.length === 0) {
+                    loadGallery(); // Reload to show empty message
+                }
+
+            } catch (error) {
+                console.error('Error deleting gallery item:', error);
+                alert('Failed to delete item. Please try again.');
+            }
+        }
+
+        // Clear all gallery items
+        async function clearAllGallery() {
+            if (!confirm('Are you sure you want to clear the entire gallery? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const db = await openGalleryDB();
+                await clearGalleryDB(db);
+                loadGallery(); // Reload to show empty message
+            } catch (error) {
+                console.error('Error clearing gallery:', error);
+                alert('Failed to clear gallery. Please try again.');
+            }
+        }
+
         // Setup all event listeners
         function setupEventListeners() {
             // Tab navigation
@@ -1998,6 +2351,201 @@
                 console.log('Sending video job to service worker:', jobData.id);
 
                 // Send to service worker
+                await sendJobToServiceWorker(jobData);
+
+                // Switch to gallery tab to show progress
+                switchTab('gallery');
+
+            } catch (error) {
+                console.error('Error submitting video job:', error);
+                errorText.textContent = error.message || 'An unexpected error occurred.';
+                errorMessage.classList.add('show');
+                
+                // Re-enable form if submission fails
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Video';
+                loading.classList.remove('show');
+                document.getElementById('videoForm').classList.remove('settings-collapsed');
+                document.getElementById('videoForm').classList.add('settings-expanded');
+            }
+        });
+
+        // Image Form Handler (Background Processing)
+        document.getElementById('imageForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('imageSubmitBtn');
+            const loading = document.getElementById('imageLoading');
+            const imageContainer = document.getElementById('imageContainer');
+            const successMessage = document.getElementById('imageSuccessMessage');
+            const errorMessage = document.getElementById('imageErrorMessage');
+            const errorText = document.getElementById('imageErrorText');
+            const inputImageField = document.getElementById('inputImage');
+
+            try {
+                // Check throttling before any UI changes
+                canCallWebhook('image');
+
+                // Reset UI State and collapse settings
+                imageContainer.classList.remove('show');
+                successMessage.classList.remove('show');
+                errorMessage.classList.remove('show');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Generating in Background...';
+                loading.classList.add('show');
+
+                // Collapse the form settings
+                document.getElementById('imageForm').classList.remove('settings-expanded');
+                document.getElementById('imageForm').classList.add('settings-collapsed');
+
+                // Update throttle timestamp immediately after UI changes
+                updateWebhookTimestamp('image');
+            } catch (throttleError) {
+                // Handle throttling error without changing UI state
+                errorText.textContent = throttleError.message;
+                errorMessage.classList.add('show');
+                return;
+            }
+
+            try {
+                const formFields = {
+                    "prompt": document.getElementById('imagePrompt').value,
+                    "size": document.querySelector('input[name="size"]:checked').value,
+                    "quality": document.querySelector('input[name="quality"]:checked').value,
+                    "outputFormat": document.querySelector('input[name="outputFormat"]:checked').value,
+                    "submittedAt": new Date().toISOString(),
+                    "formMode": "test"
+                };
+
+                let imageData = null;
+                if (inputImageField.files.length > 0) {
+                    const file = inputImageField.files[0];
+                    const buffer = await file.arrayBuffer();
+                    imageData = {
+                        buffer: buffer,
+                        type: file.type,
+                        fileName: file.name
+                    };
+                }
+
+                // Create job data for service worker
+                const jobData = {
+                    id: 'image_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    type: 'image',
+                    webhookUrl: 'https://n8n.xtend3d.com/webhook/dalle-gen',
+                    headers: {
+                        'azure': 'xtend3d',
+                        'X-Device-Fingerprint': generateDeviceFingerprint(),
+                        'X-Request-Timestamp': Date.now().toString()
+                    },
+                    formFields: formFields,
+                    imageData: imageData,
+                    prompt: document.getElementById('imagePrompt').value,
+                    settings: {
+                        size: document.querySelector('input[name="size"]:checked').value,
+                        quality: document.querySelector('input[name="quality"]:checked').value,
+                        outputFormat: document.querySelector('input[name="outputFormat"]:checked').value
+                    }
+                };
+
+                console.log('Sending image job to service worker:', jobData.id);
+
+                // Send to service worker
+                await sendJobToServiceWorker(jobData);
+
+                // Switch to gallery tab to show progress
+                switchTab('gallery');
+
+            } catch (error) {
+                console.error('Error submitting image job:', error);
+                errorText.textContent = error.message || 'An unexpected error occurred.';
+                errorMessage.classList.add('show');
+
+                // Re-enable form if submission fails
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Image';
+                loading.classList.remove('show');
+                document.getElementById('imageForm').classList.remove('settings-collapsed');
+                document.getElementById('imageForm').classList.add('settings-expanded');
+            }
+        });
+
+        // PWA Install Banner Logic
+        let deferredPrompt;
+        const pwaInstallBanner = document.getElementById('pwaInstallBanner');
+        const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+        const pwaLaterBtn = document.getElementById('pwaLaterBtn');
+        const pwaDismissBtn = document.getElementById('pwaDismissBtn');
+        const pwaShowInstructions = document.getElementById('pwaShowInstructions');
+        const safariInstructions = document.getElementById('safariInstructions');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallBanner();
+        });
+
+        function showInstallBanner() {
+            // Don't show if dismissed recently
+            const dismissed = localStorage.getItem('pwa_install_dismissed');
+            if (dismissed && (Date.now() - parseInt(dismissed)) < 3 * 24 * 60 * 60 * 1000) { // 3 days
+                return;
+            }
+            
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+            if (isStandalone) return;
+
+            if (deferredPrompt) {
+                pwaInstallBtn.style.display = 'block';
+                pwaShowInstructions.style.display = 'none';
+            } else if (isIOS) {
+                pwaInstallBtn.style.display = 'none';
+                pwaShowInstructions.style.display = 'block';
+            } else {
+                return; // Not installable
+            }
+
+            pwaInstallBanner.classList.add('show');
+            document.body.classList.add('pwa-banner-visible');
+        }
+
+        pwaInstallBtn.addEventListener('click', () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+            hideInstallBanner();
+        });
+
+        pwaShowInstructions.addEventListener('click', () => {
+            safariInstructions.style.display = 'block';
+            pwaShowInstructions.style.display = 'none';
+        });
+
+        pwaLaterBtn.addEventListener('click', () => {
+            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+            hideInstallBanner();
+        });
+
+        pwaDismissBtn.addEventListener('click', () => {
+            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+            hideInstallBanner();
+        });
+
+        function hideInstallBanner() {
+            pwaInstallBanner.classList.remove('show');
+            document.body.classList.remove('pwa-banner-visible');
+        }
+
+        // Check if running as PWA and show banner if not
+        setTimeout(showInstallBanner, 2000);
                 await sendJobToServiceWorker(jobData);
                 
                 // Update loading text to show background processing
