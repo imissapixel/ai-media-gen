@@ -2189,9 +2189,9 @@
         function setupEventListeners() {
             // Tab navigation
             document.querySelectorAll('.tab-button').forEach(button => {
-                button.addEventListener('click', function(e) {
-                    const tabName = this.getAttribute('data-tab');
-                    switchTab(tabName, e);
+                button.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    switchTab(tabName);
                 });
             });
 
@@ -2234,8 +2234,8 @@
             });
         }
 
-        // Tab switching functionality  
-        function switchTab(tabName, event) {
+        // Tab switching functionality
+        function switchTab(tabName) {
             // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -2249,16 +2249,10 @@
             // Show selected tab content
             document.getElementById(tabName + '-tab').classList.add('active');
             
-            // Add active class to clicked button
-            if (event && event.target) {
-                event.target.classList.add('active');
-            } else {
-                // Fallback: find and activate the correct button
-                document.querySelectorAll('.tab-button').forEach(btn => {
-                    if (btn.textContent.toLowerCase().includes(tabName)) {
-                        btn.classList.add('active');
-                    }
-                });
+            // Add active class to the correct button
+            const buttonToActivate = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+            if (buttonToActivate) {
+                buttonToActivate.classList.add('active');
             }
             
             // Load gallery if switching to gallery tab
