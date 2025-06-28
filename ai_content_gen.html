@@ -2317,29 +2317,26 @@
             }
 
             try {
-                const payload = [
-                  {
-                    "Video Description": document.getElementById('videoDescription').value,
-                    "Duration": document.querySelector('input[name="duration"]:checked').value,
-                    "Aspect Ratio": document.querySelector('input[name="aspectRatio"]:checked').value,
-                    "Format": document.querySelector('input[name="format"]:checked').value,
-                    "submittedAt": new Date().toISOString(),
-                    "formMode": "test"
-                  }
-                ];
+                // Prepare form data for service worker (convert to serializable format)
+                const formFields = {
+                    prompt: document.getElementById('videoDescription').value,
+                    duration: document.querySelector('input[name="duration"]:checked').value,
+                    aspect_ratio: document.querySelector('input[name="aspectRatio"]:checked').value,
+                    format: document.querySelector('input[name="format"]:checked').value,
+                    n: '1'
+                };
 
                 // Create job data for service worker
                 const jobData = {
                     id: 'video_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                     type: 'video',
-                    webhookUrl: 'https://n8n.xtend3d.com/webhook/sora-video-gen',
+                    webhookUrl: 'https://n8n.xtend3d.com/webhook/sora-video-1',
                     headers: {
-                        'Content-Type': 'application/json',
                         'azure': 'xtend3d',
                         'X-Device-Fingerprint': generateDeviceFingerprint(),
                         'X-Request-Timestamp': Date.now().toString()
                     },
-                    payload: payload,
+                    formFields: formFields,
                     prompt: document.getElementById('videoDescription').value,
                     settings: {
                         duration: document.querySelector('input[name="duration"]:checked').value,
@@ -2351,201 +2348,6 @@
                 console.log('Sending video job to service worker:', jobData.id);
 
                 // Send to service worker
-                await sendJobToServiceWorker(jobData);
-
-                // Switch to gallery tab to show progress
-                switchTab('gallery');
-
-            } catch (error) {
-                console.error('Error submitting video job:', error);
-                errorText.textContent = error.message || 'An unexpected error occurred.';
-                errorMessage.classList.add('show');
-                
-                // Re-enable form if submission fails
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Generate Video';
-                loading.classList.remove('show');
-                document.getElementById('videoForm').classList.remove('settings-collapsed');
-                document.getElementById('videoForm').classList.add('settings-expanded');
-            }
-        });
-
-        // Image Form Handler (Background Processing)
-        document.getElementById('imageForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const submitBtn = document.getElementById('imageSubmitBtn');
-            const loading = document.getElementById('imageLoading');
-            const imageContainer = document.getElementById('imageContainer');
-            const successMessage = document.getElementById('imageSuccessMessage');
-            const errorMessage = document.getElementById('imageErrorMessage');
-            const errorText = document.getElementById('imageErrorText');
-            const inputImageField = document.getElementById('inputImage');
-
-            try {
-                // Check throttling before any UI changes
-                canCallWebhook('image');
-
-                // Reset UI State and collapse settings
-                imageContainer.classList.remove('show');
-                successMessage.classList.remove('show');
-                errorMessage.classList.remove('show');
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Generating in Background...';
-                loading.classList.add('show');
-
-                // Collapse the form settings
-                document.getElementById('imageForm').classList.remove('settings-expanded');
-                document.getElementById('imageForm').classList.add('settings-collapsed');
-
-                // Update throttle timestamp immediately after UI changes
-                updateWebhookTimestamp('image');
-            } catch (throttleError) {
-                // Handle throttling error without changing UI state
-                errorText.textContent = throttleError.message;
-                errorMessage.classList.add('show');
-                return;
-            }
-
-            try {
-                const formFields = {
-                    "prompt": document.getElementById('imagePrompt').value,
-                    "size": document.querySelector('input[name="size"]:checked').value,
-                    "quality": document.querySelector('input[name="quality"]:checked').value,
-                    "outputFormat": document.querySelector('input[name="outputFormat"]:checked').value,
-                    "submittedAt": new Date().toISOString(),
-                    "formMode": "test"
-                };
-
-                let imageData = null;
-                if (inputImageField.files.length > 0) {
-                    const file = inputImageField.files[0];
-                    const buffer = await file.arrayBuffer();
-                    imageData = {
-                        buffer: buffer,
-                        type: file.type,
-                        fileName: file.name
-                    };
-                }
-
-                // Create job data for service worker
-                const jobData = {
-                    id: 'image_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                    type: 'image',
-                    webhookUrl: 'https://n8n.xtend3d.com/webhook/dalle-gen',
-                    headers: {
-                        'azure': 'xtend3d',
-                        'X-Device-Fingerprint': generateDeviceFingerprint(),
-                        'X-Request-Timestamp': Date.now().toString()
-                    },
-                    formFields: formFields,
-                    imageData: imageData,
-                    prompt: document.getElementById('imagePrompt').value,
-                    settings: {
-                        size: document.querySelector('input[name="size"]:checked').value,
-                        quality: document.querySelector('input[name="quality"]:checked').value,
-                        outputFormat: document.querySelector('input[name="outputFormat"]:checked').value
-                    }
-                };
-
-                console.log('Sending image job to service worker:', jobData.id);
-
-                // Send to service worker
-                await sendJobToServiceWorker(jobData);
-
-                // Switch to gallery tab to show progress
-                switchTab('gallery');
-
-            } catch (error) {
-                console.error('Error submitting image job:', error);
-                errorText.textContent = error.message || 'An unexpected error occurred.';
-                errorMessage.classList.add('show');
-
-                // Re-enable form if submission fails
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Generate Image';
-                loading.classList.remove('show');
-                document.getElementById('imageForm').classList.remove('settings-collapsed');
-                document.getElementById('imageForm').classList.add('settings-expanded');
-            }
-        });
-
-        // PWA Install Banner Logic
-        let deferredPrompt;
-        const pwaInstallBanner = document.getElementById('pwaInstallBanner');
-        const pwaInstallBtn = document.getElementById('pwaInstallBtn');
-        const pwaLaterBtn = document.getElementById('pwaLaterBtn');
-        const pwaDismissBtn = document.getElementById('pwaDismissBtn');
-        const pwaShowInstructions = document.getElementById('pwaShowInstructions');
-        const safariInstructions = document.getElementById('safariInstructions');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            showInstallBanner();
-        });
-
-        function showInstallBanner() {
-            // Don't show if dismissed recently
-            const dismissed = localStorage.getItem('pwa_install_dismissed');
-            if (dismissed && (Date.now() - parseInt(dismissed)) < 3 * 24 * 60 * 60 * 1000) { // 3 days
-                return;
-            }
-            
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-
-            if (isStandalone) return;
-
-            if (deferredPrompt) {
-                pwaInstallBtn.style.display = 'block';
-                pwaShowInstructions.style.display = 'none';
-            } else if (isIOS) {
-                pwaInstallBtn.style.display = 'none';
-                pwaShowInstructions.style.display = 'block';
-            } else {
-                return; // Not installable
-            }
-
-            pwaInstallBanner.classList.add('show');
-            document.body.classList.add('pwa-banner-visible');
-        }
-
-        pwaInstallBtn.addEventListener('click', () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('User accepted the install prompt');
-                    }
-                    deferredPrompt = null;
-                });
-            }
-            hideInstallBanner();
-        });
-
-        pwaShowInstructions.addEventListener('click', () => {
-            safariInstructions.style.display = 'block';
-            pwaShowInstructions.style.display = 'none';
-        });
-
-        pwaLaterBtn.addEventListener('click', () => {
-            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
-            hideInstallBanner();
-        });
-
-        pwaDismissBtn.addEventListener('click', () => {
-            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
-            hideInstallBanner();
-        });
-
-        function hideInstallBanner() {
-            pwaInstallBanner.classList.remove('show');
-            document.body.classList.remove('pwa-banner-visible');
-        }
-
-        // Check if running as PWA and show banner if not
-        setTimeout(showInstallBanner, 2000);
                 await sendJobToServiceWorker(jobData);
                 
                 // Update loading text to show background processing
@@ -3041,7 +2843,7 @@
             document.body.classList.remove('pwa-banner-visible');
         }
         
-        // PWA Install Event Handlers
+        // PWA Install Event Listeners
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
