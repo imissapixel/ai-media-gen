@@ -1678,6 +1678,23 @@
             setupEventListeners();
             initServiceWorkerCommunication();
             
+            // Fallback: Set up tab listeners again after a short delay
+            setTimeout(() => {
+                console.log('Setting up fallback tab listeners');
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    if (!button.hasAttribute('data-listener-added')) {
+                        button.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const tabName = this.dataset.tab;
+                            console.log('Fallback tab clicked:', tabName);
+                            switchTab(tabName);
+                        });
+                        button.setAttribute('data-listener-added', 'true');
+                    }
+                });
+            }, 100);
+            
             // Update background jobs UI every 5 seconds
             setInterval(updateBackgroundJobsUI, 5000);
             
@@ -2187,12 +2204,16 @@
 
         // Setup all event listeners
         function setupEventListeners() {
-            // Tab navigation
+            // Tab navigation - more robust event handling
             document.querySelectorAll('.tab-button').forEach(button => {
-                button.addEventListener('click', function() {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     const tabName = this.dataset.tab;
+                    console.log('Tab clicked:', tabName); // Debug log
                     switchTab(tabName);
                 });
+                button.setAttribute('data-listener-added', 'true');
             });
 
             // Improve Prompt buttons
@@ -2236,6 +2257,8 @@
 
         // Tab switching functionality
         function switchTab(tabName) {
+            console.log('Switching to tab:', tabName); // Debug log
+            
             // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -2247,12 +2270,21 @@
             });
             
             // Show selected tab content
-            document.getElementById(tabName + '-tab').classList.add('active');
+            const targetTab = document.getElementById(tabName + '-tab');
+            if (targetTab) {
+                targetTab.classList.add('active');
+                console.log('Tab content activated:', tabName + '-tab'); // Debug log
+            } else {
+                console.error('Tab content not found:', tabName + '-tab');
+            }
             
             // Add active class to the correct button
             const buttonToActivate = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
             if (buttonToActivate) {
                 buttonToActivate.classList.add('active');
+                console.log('Tab button activated:', tabName); // Debug log
+            } else {
+                console.error('Tab button not found:', tabName);
             }
             
             // Load gallery if switching to gallery tab
